@@ -36,3 +36,66 @@
     transform: rotate(360deg);
   }
 }
+
+/* App.css */
+.app-container {
+  max-width: 800px;
+  margin: 2rem auto;
+  font-family: 'Segoe UI', Roboto, sans-serif;
+  padding: 1rem;
+  background: #f9f9f9;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.header {
+  text-align: center;
+  font-size: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.modes {
+  margin-bottom: 1rem;
+}
+
+.modes label {
+  margin-right: 1rem;
+  font-size: 1rem;
+}
+
+.search-input {
+  font-size: 1.25rem;
+  padding: 0.5rem;
+  width: 200px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.result-list {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 0;
+}
+
+.result-list li {
+  font-size: 2rem;
+  margin: 0.5rem;
+  padding: 0.5rem;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.result-list .no-data {
+  font-size: 1rem;
+  color: #888;
+}
