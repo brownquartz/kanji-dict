@@ -1,6 +1,6 @@
 {
   "name": "kanji-dict",
-  "homepage": "https://brownquartz.github.io/kanji-decomp-app",
+  "homepage": "https://brownquartz.github.io/kanji-dict",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
