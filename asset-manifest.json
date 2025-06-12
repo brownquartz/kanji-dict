@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/kanji-decomp-app/static/css/main.0b346e4b.css",
+    "main.js": "/kanji-decomp-app/static/js/main.4a221b46.js",
+    "static/js/453.dd2a4fb4.chunk.js": "/kanji-decomp-app/static/js/453.dd2a4fb4.chunk.js",
+    "index.html": "/kanji-decomp-app/index.html",
+    "main.0b346e4b.css.map": "/kanji-decomp-app/static/css/main.0b346e4b.css.map",
+    "main.4a221b46.js.map": "/kanji-decomp-app/static/js/main.4a221b46.js.map",
+    "453.dd2a4fb4.chunk.js.map": "/kanji-decomp-app/static/js/453.dd2a4fb4.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.0b346e4b.css",
+    "static/js/main.4a221b46.js"
+  ]
+}
