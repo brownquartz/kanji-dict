@@ -1,3 +1,7 @@
+# go to webpage
+
+https://brownquartz.github.io/kanji-dict/
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
@@ -68,3 +72,11 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 ### `npm run build` fails to minify
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+
+
+### 20250613
+   1. 中国漢字もあるため、日本語のみ絞り込む必要？
+   2. 再帰処理("口"と"品"を入力すると"嘔"が出るようにする)
+      →　現状："嘔"="口"+"區"
+                        "區"="匸"+"品"
+      →　計画："口"+"匸"+"品"="嘔"
