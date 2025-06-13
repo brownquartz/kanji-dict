@@ -5,67 +5,83 @@ import './App.css';
 
 function App() {
   const [decomp, setDecomp] = useState({});
-  const [variants, setVariants] = useState({ byVariant: {} });
+  const [variants, setVariants] = useState({ byVariant: {}, byBase: {} });
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState('part2char');
   const [result, setResult] = useState([]);
+
+  // 再帰的に分解をフラット化するユーティリティ
+  const buildFlatMap = (map) => {
+    const cache = {};
+    const dfs = (kanji) => {
+      if (cache[kanji]) return cache[kanji];
+      // 初回呼び出し時に空の Set をキャッシュに登録しておく（循環防止）
+      const all = new Set();
+      cache[kanji] = all;
+      const direct = map[kanji] || [];
+      direct.forEach(p => {
+        all.add(p);
+        if (map[p]) {
+          dfs(p).forEach(x => all.add(x));
+        }
+      });
+      return all;
+    };
+    Object.keys(map).forEach(k => dfs(k));
+    return cache;
+
+  };
 
   // JSON を並列フェッチしてマップを正規化
   useEffect(() => {
     const base = process.env.PUBLIC_URL || '';
     Promise.all([
-      fetch(`${base}/cjkvi_decomp_resolved.json`).then(res => {
-        if (!res.ok) throw new Error(`decomp HTTP ${res.status}`);
-        return res.json();
-      }),
-      fetch(`${base}/variants.json`).then(res => {
-        if (!res.ok) throw new Error(`variants HTTP ${res.status}`);
-        return res.json();
-      })
+      fetch(`${base}/cjkvi_decomp_resolved.json`).then(res => res.ok ? res.json() : Promise.reject(res)),
+      fetch(`${base}/variants.json`).then(res => res.ok ? res.json() : Promise.reject(res))
     ])
-      .then(([decompJson, variantsJson]) => {
-        // 異体字対応：原字と異体字をまとめる normalize 関数
-        const normalize = ch => {
-          const bases = variantsJson.byVariant[ch];
-          return bases ? bases[0] : ch;
-        };
-        // 部品マップの正規化
-        const normalized = {};
-        Object.entries(decompJson).forEach(([kanji, parts]) => {
-          normalized[kanji] = parts.map(normalize);
-        });
-        setDecomp(normalized);
-        setVariants(variantsJson);
-      })
-      .catch(err => console.error('JSON読み込み失敗:', err));
+    .then(([decompJson, variantsJson]) => {
+      // 正規化関数
+      const normalize = ch => {
+        const bases = variantsJson.byVariant[ch];
+        return bases ? bases[0] : ch;
+      };
+      // 直接部品マップと異体字マップをセット
+      setVariants(variantsJson);
+      // 部品マップを正規化
+      const normalized = {};
+      Object.entries(decompJson).forEach(([kanji, parts]) => {
+        normalized[kanji] = parts.map(normalize);
+      });
+      setDecomp(normalized);
+    })
+    .catch(err => console.error('JSON読み込み失敗:', err));
   }, []);
 
-  // クエリやモード変化時に検索
+  // 入力・モード・マップ変更時に検索
   useEffect(() => {
-    // 漢字のみ抽出
     const rawChars = Array.from(query).filter(ch => /\p{Script=Han}/u.test(ch));
     if (rawChars.length === 0) {
       setResult([]);
       return;
     }
-    // 各入力文字の原字＋異体字リスト
-    const variantGroups = rawChars.map(ch => {
-      const vs = variants.byVariant[ch] || [];
-      return [ch, ...vs];
-    });
-
+    // 各文字の原字+異体字一覧を作成
+    const variantGroups = rawChars.map(ch => [ch, ...(variants.byVariant[ch] || [])]);
+    // フラットマップを一度だけ作成
+    const flatMap = buildFlatMap(decomp);
+    // 入力の全組み合わせ（直積）を生成
+    const combos = variantGroups.reduce((acc, arr) => {
+      if (acc.length === 0) return arr.map(x => [x]);
+      return acc.flatMap(prev => arr.map(x => [...prev, x]));
+    }, []);
     let matches = [];
+
     if (mode === 'part2char') {
-      // 部品→漢字: すべてのグループからいずれか1つ含む漢字を探す
-      matches = Object.entries(decomp)
-        .filter(([, comps]) =>
-          variantGroups.every(group =>
-            group.some(v => comps.includes(v))
-          )
-        )
+      // 部品→漢字: 組み合わせのいずれかをすべて含む漢字を返す
+      matches = Object.entries(flatMap)
+        .filter(([, leafSet]) => combos.some(combo => combo.every(p => leafSet.has(p))))
         .map(([kanji]) => kanji);
     } else {
-      // 漢字→部品: 第一入力文字の部品をそのまま返す
+      // 漢字→部品: 最初の文字の直接部品を返す
       const first = rawChars[0];
       matches = decomp[first] || [];
     }
@@ -79,47 +95,26 @@ function App() {
       <div className="controls">
         <div className="modes">
           <label>
-            <input
-              type="radio"
-              name="mode"
-              value="part2char"
-              checked={mode === 'part2char'}
-              onChange={() => setMode('part2char')}
-            /> 部品 → 漢字
+            <input type="radio" name="mode" value="part2char"
+              checked={mode === 'part2char'} onChange={() => setMode('part2char')} /> 部品 → 漢字
           </label>
           <label>
-            <input
-              type="radio"
-              name="mode"
-              value="char2part"
-              checked={mode === 'char2part'}
-              onChange={() => setMode('char2part')}
-            /> 漢字 → 部品
+            <input type="radio" name="mode" value="char2part"
+              checked={mode === 'char2part'} onChange={() => setMode('char2part')} /> 漢字 → 部品
           </label>
         </div>
-        <input
-          className="search-input"
-          type="text"
-          value={query}
+        <input className="search-input" value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder={
-            mode === 'part2char'
-              ? '部品となる漢字を入力'
-              : '分解する漢字を入力'
-          }
-        />
+          placeholder={mode==='part2char' ? '部品となる漢字を入力' : '分解する漢字を入力'} />
       </div>
       <ul className="result-list">
-        {result.length > 0 ? (
-          result.map((item, idx) => <li key={idx}>{item}</li>)
-        ) : (
-          <li className="no-data">
-            {query === '' ? '入力待ち...' : '該当なし'}
-          </li>
-        )}
+        {result.length > 0 ? result.map((ch,i)=><li key={i}>{ch}</li>)
+          : <li className="no-data">{query===''?'入力待ち...':'該当なし'}</li>}
       </ul>
     </div>
   );
 }
 
 export default App;
+
+
