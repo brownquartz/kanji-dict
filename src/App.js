@@ -8,26 +8,26 @@ function App() {
   const [mode, setMode] = useState('part2char');
   const [result, setResult] = useState([]);
 
-  // 並列で JSON を読み込んで正規化
+  // JSON を並列フェッチしてマップを正規化
   useEffect(() => {
-    const base = process.env.PUBLIC_URL;
+    const base = process.env.PUBLIC_URL || '';
     Promise.all([
       fetch(`${base}/cjkvi_decomp_resolved.json`).then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) throw new Error(`decomp HTTP ${res.status}`);
         return res.json();
       }),
       fetch(`${base}/variants.json`).then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) throw new Error(`variants HTTP ${res.status}`);
         return res.json();
       })
     ])
       .then(([decompJson, variantsJson]) => {
-        // 正規化関数
+        // 異体字対応：原字と異体字をまとめる normalize 関数
         const normalize = ch => {
-          const baseChars = variantsJson.byVariant[ch];
-          return baseChars ? baseChars[0] : ch;
+          const bases = variantsJson.byVariant[ch];
+          return bases ? bases[0] : ch;
         };
-        // 部品マップを正規化
+        // 部品マップの正規化
         const normalized = {};
         Object.entries(decompJson).forEach(([kanji, parts]) => {
           normalized[kanji] = parts.map(normalize);
@@ -38,30 +38,36 @@ function App() {
       .catch(err => console.error('JSON読み込み失敗:', err));
   }, []);
 
-  // 入力・モード・データ変更時に検索
+  // クエリやモード変化時に検索
   useEffect(() => {
-    const normalizeChar = ch => {
-      const bases = variants.byVariant[ch];
-      return bases ? bases[0] : ch;
-    };
-    // 入力から漢字だけ取り出し、正規化
-    const inputChars = Array.from(query)
-      .filter(ch => /\p{Script=Han}/u.test(ch))
-      .map(normalizeChar);
-    if (inputChars.length === 0) {
+    // 漢字のみ抽出
+    const rawChars = Array.from(query).filter(ch => /\p{Script=Han}/u.test(ch));
+    if (rawChars.length === 0) {
       setResult([]);
       return;
     }
-    const uniqueChars = [...new Set(inputChars)];
+    // 各入力文字の原字＋異体字リスト
+    const variantGroups = rawChars.map(ch => {
+      const vs = variants.byVariant[ch] || [];
+      return [ch, ...vs];
+    });
+
     let matches = [];
     if (mode === 'part2char') {
+      // 部品→漢字: すべてのグループからいずれか1つ含む漢字を探す
       matches = Object.entries(decomp)
-        .filter(([, comps]) => uniqueChars.every(p => comps.includes(p)))
+        .filter(([, comps]) =>
+          variantGroups.every(group =>
+            group.some(v => comps.includes(v))
+          )
+        )
         .map(([kanji]) => kanji);
     } else {
-      const base = uniqueChars[0];
-      matches = decomp[base] || [];
+      // 漢字→部品: 第一入力文字の部品をそのまま返す
+      const first = rawChars[0];
+      matches = decomp[first] || [];
     }
+
     setResult(matches);
   }, [query, mode, decomp, variants]);
 
