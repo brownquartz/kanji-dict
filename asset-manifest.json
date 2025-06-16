@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/kanji-dict/static/css/main.79aec05a.css",
-    "main.js": "/kanji-dict/static/js/main.17b60759.js",
+    "main.css": "/kanji-dict/static/css/main.2ed7897d.css",
+    "main.js": "/kanji-dict/static/js/main.16ebc35c.js",
     "static/js/453.dd2a4fb4.chunk.js": "/kanji-dict/static/js/453.dd2a4fb4.chunk.js",
     "index.html": "/kanji-dict/index.html",
-    "main.79aec05a.css.map": "/kanji-dict/static/css/main.79aec05a.css.map",
-    "main.17b60759.js.map": "/kanji-dict/static/js/main.17b60759.js.map",
+    "main.2ed7897d.css.map": "/kanji-dict/static/css/main.2ed7897d.css.map",
+    "main.16ebc35c.js.map": "/kanji-dict/static/js/main.16ebc35c.js.map",
     "453.dd2a4fb4.chunk.js.map": "/kanji-dict/static/js/453.dd2a4fb4.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.79aec05a.css",
-    "static/js/main.17b60759.js"
+    "static/css/main.2ed7897d.css",
+    "static/js/main.16ebc35c.js"
   ]
 }
