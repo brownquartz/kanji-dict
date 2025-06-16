@@ -1,51 +1,12 @@
-.App {
-  text-align: center;
-}
-
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
-}
-
-.App-link {
-  color: #61dafb;
-}
-
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* App.css */
+/* Core Layout */
 .app-container {
   max-width: 800px;
   margin: 2rem auto;
-  font-family: 'Segoe UI', Roboto, sans-serif;
   padding: 1rem;
   background: #f9f9f9;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  font-family: 'Segoe UI', Roboto, sans-serif;
 }
 
 .header {
@@ -61,15 +22,60 @@
   margin-bottom: 2rem;
 }
 
+/* Mode Toggle Buttons */
 .modes {
+  display: flex;
+  gap: 0.5rem;
   margin-bottom: 1rem;
 }
-
-.modes label {
-  margin-right: 1rem;
-  font-size: 1rem;
+.modes button {
+  padding: 0.5rem 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+.modes button:hover {
+  background-color: #e9ecef;
+}
+.modes button.active {
+  background-color: #007bff;
+  color: #fff;
+  border-color: #007bff;
 }
 
+/* Region Filter Buttons */
+.region-filter {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.region-filter button {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+.region-filter button:hover {
+  background-color: #e9ecef;
+}
+.region-filter button.active {
+  background-color: #28a745;
+  color: #fff;
+  border-color: #28a745;
+}
+
+/* Search Box */
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
 .search-input {
   font-size: 1.25rem;
   padding: 0.5rem;
@@ -77,15 +83,35 @@
   border: 1px solid #ccc;
   border-radius: 4px;
 }
+.search-button {
+  padding: 0.5rem 1rem;
+  border: 1px solid #007bff;
+  border-radius: 4px;
+  background-color: #007bff;
+  color: #fff;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.search-button:hover {
+  background-color: #0056b3;
+}
+.search-info {
+  font-size: 0.9rem;
+  color: #555;
+}
 
-/* 結果リストを左詰めに */
+/* Results List */
+.result-section {
+  margin-top: 1rem;
+}
 .result-list {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-start; /* <- 中央揃えから左揃えに変更 */
+  justify-content: flex-start;
+  list-style: none;
   padding: 0;
+  margin: 0;
 }
-
 .result-list li {
   font-size: 2rem;
   margin: 0.5rem;
@@ -93,72 +119,27 @@
   background: #fff;
   border: 1px solid #ddd;
   border-radius: 4px;
+  cursor: default;
 }
-
-.result-list li::marker {
-  content: "";         /* マーカー自体の内容を空に */
-}
-
 .result-list .no-data {
   font-size: 1rem;
   color: #888;
+  margin: 1rem;
 }
 
-/* Search box layout */
-.search-box {
-  display: flex;
-  align-items: center;
-}
-
-/* Search button styling */
-.search-button {
-  font-size: 1.25rem;
-  padding: 0.5rem 1rem;
-  margin-left: 0.5rem;
-  background-color: #007bff;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.search-button:hover {
-  background-color: #0056b3;
-}
-
-/* 「その他」ボタンのスタイル */
+/* More Button */
 .more-button {
+  display: block;
   font-size: 1rem;
   padding: 0.5rem 1rem;
-  margin: 1rem auto 0 auto;
-  display: block;
-  background-color: #28a745;
-  color: #fff;
+  margin: 1rem auto 0;
   border: none;
   border-radius: 4px;
+  background-color: #17a2b8;
+  color: #fff;
   cursor: pointer;
   transition: background-color 0.2s;
 }
-
 .more-button:hover {
-  background-color: #218838;
-}
-
-/* 検索ボックス全体に余白と中央揃えを追加 */
-.search-box {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;   /* ボタンとテキストの間を均等にあける */
-}
-
-/* すでにある .search-button の margin-left は不要になるので削除 or 上書き */
-.search-button {
-  margin-left: 0; /* 元の margin-left:0.5rem をリセット */
-}
-
-/* 検索ワード表示 */
-.search-info {
-  font-size: 0.9rem;
-  color: #555;
+  background-color: #117a8b;
 }
