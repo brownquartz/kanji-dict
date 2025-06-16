@@ -13,70 +13,83 @@ function App() {
 
   const MAX_DISPLAY = 100;
 
-  // Reset page when query or mode changes
+  // Reset pagination on query/mode change
   useEffect(() => {
     setPage(1);
   }, [query, mode]);
 
-  // Handle search
+  // Trigger search
   const handleSearch = () => setQuery(inputValue.trim());
   const handleKeyDown = e => { if (e.key === 'Enter') handleSearch(); };
 
-  // Load initial data
+  // Load data on mount
   useEffect(() => {
     const base = process.env.PUBLIC_URL || '';
-    Promise.all([
-      fetch(`${base}/direct_decomp.json`).then(r => r.json()),
-      fetch(`${base}/pattern_decomp.json`).then(r => r.json()),
-      fetch(`${base}/variants.json`).then(r => r.json())
-    ]).then(([direct, patterns, variants]) => {
-      setDirectMap(direct);
-      setPatternMap(patterns);
-      setVariantsMap(variants.byBase || {});
-    }).catch(err => console.error('データ読み込みエラー:', err));
+    async function loadData() {
+      try {
+        const [direct, vdata] = await Promise.all([
+          fetch(`${base}/direct_decomp.json`).then(r => r.json()),
+          fetch(`${base}/variants.json`).then(r => r.json())
+        ]);
+        setDirectMap(direct);
+        setVariantsMap(vdata.byBase || {});
+
+        // Merge pattern chunks
+        const merged = {};
+        for (let i = 1; i <= 20; i++) {
+          const idx = String(i).padStart(2, '0');
+          const chunk = await fetch(
+            `${base}/pattern_chunks/pattern_decomp_${idx}.json`
+          ).then(r => r.json());
+          Object.assign(merged, chunk);
+        }
+        setPatternMap(merged);
+      } catch (err) {
+        console.error('データ読み込みエラー:', err);
+      }
+    }
+    loadData();
   }, []);
 
-  // Perform search
+  // Perform search when query or data changes
   useEffect(() => {
-    if (!query) {
-      setResult([]);
-      return;
-    }
+    if (!query) { setResult([]); return; }
     const rawParts = Array.from(query).filter(ch => /\p{Script=Han}/u.test(ch));
-    if (rawParts.length === 0) {
-      setResult([]);
-      return;
-    }
+    if (!rawParts.length) { setResult([]); return; }
 
     if (mode === 'part2char') {
-      // 部品→漢字（重複部品も対応）
-      const needCounts = rawParts.reduce((m, p) => { m[p] = (m[p] || 0) + 1; return m; }, {});
+      // 部品→漢字: treat input parts as atomic
+      const needCounts = rawParts.reduce((acc, p) => {
+        acc[p] = (acc[p] || 0) + 1;
+        return acc;
+      }, {});
+
       const found = new Set();
       Object.entries(patternMap).forEach(([kanji, patterns]) => {
         for (const patArr of patterns) {
           let ok = true;
           for (const [part, cnt] of Object.entries(needCounts)) {
-            const have = patArr.reduce((n, x) => x === part ? n + 1 : n, 0);
+            const have = patArr.reduce((sum, x) => x === part ? sum + 1 : sum, 0);
             if (have < cnt) { ok = false; break; }
           }
           if (ok) { found.add(kanji); break; }
         }
       });
-      // 入力が1文字のとき、その文字（部品）も結果に含める
+      // For single-part input, include the part itself
       if (rawParts.length === 1) {
         found.add(rawParts[0]);
       }
       setResult(Array.from(found));
 
     } else {
-      // 漢字→部品
+      // 漢字→部品: include the character itself first
       const target = query[0];
       const parts = directMap[target] || [];
       setResult([target, ...parts]);
     }
   }, [query, mode, patternMap, directMap]);
 
-  // Determine which results to display
+  // Paginate results for 部品→漢字
   const visibleResults = mode === 'part2char'
     ? result.slice(0, page * MAX_DISPLAY)
     : result;
@@ -87,15 +100,23 @@ function App() {
       <div className="controls">
         <div className="modes">
           <label>
-            <input type="radio" name="mode" value="part2char"
+            <input
+              type="radio"
+              name="mode"
+              value="part2char"
               checked={mode === 'part2char'}
-              onChange={() => setMode('part2char')} />
+              onChange={() => setMode('part2char')}
+            />
             部品 → 漢字
           </label>
           <label>
-            <input type="radio" name="mode" value="char2part"
+            <input
+              type="radio"
+              name="mode"
+              value="char2part"
               checked={mode === 'char2part'}
-              onChange={() => setMode('char2part')} />
+              onChange={() => setMode('char2part')}
+            />
             漢字 → 部品
           </label>
         </div>
@@ -106,28 +127,45 @@ function App() {
             value={inputValue}
             onChange={e => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={mode === 'part2char' ? '部品を連続入力 例: 口口品' : '漢字を入力'}
+            placeholder={
+              mode === 'part2char'
+                ? '部品を連続入力 例: 口口品'
+                : '漢字を入力'
+            }
           />
-          <button className="search-button" onClick={handleSearch}>検索</button>
+          <button
+            className="search-button"
+            onClick={handleSearch}
+          >検索</button>
         </div>
       </div>
-
       <div className="result-section">
         {mode === 'char2part' ? (
           <ul className="result-list">
-            {visibleResults.length > 0 ? visibleResults.map((c, i) => <li key={i}>{c}</li>)
-              : <li className="no-data">{!query ? '入力待ち...' : '該当なし'}</li>}
+            {visibleResults.length > 0 ? (
+              visibleResults.map((c, i) => <li key={i}>{c}</li>)
+            ) : (
+              <li className="no-data">
+                {!query ? '入力待ち...' : '該当なし'}
+              </li>
+            )}
           </ul>
         ) : (
           <>
             <ul className="result-list">
-              {visibleResults.length > 0 ? visibleResults.map((k, i) => <li key={i}>{k}</li>)
-                : <li className="no-data">{!query ? '入力待ち...' : '該当なし'}</li>}
+              {visibleResults.length > 0 ? (
+                visibleResults.map((k, i) => <li key={i}>{k}</li>)
+              ) : (
+                <li className="no-data">
+                  {!query ? '入力待ち...' : '該当なし'}
+                </li>
+              )}
             </ul>
             {result.length > page * MAX_DISPLAY && (
-              <button className="more-button" onClick={() => setPage(page + 1)}>
-                その他
-              </button>
+              <button
+                className="more-button"
+                onClick={() => setPage(page + 1)}
+              >その他</button>
             )}
           </>
         )}
