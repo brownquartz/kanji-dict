@@ -1,93 +1,85 @@
-// 20250613
-
 import React, { useState, useEffect } from 'react';
 import './App.css';
 
 function App() {
-  const [decomp, setDecomp] = useState({});
-  const [variants, setVariants] = useState({ byVariant: {}, byBase: {} });
+  const [directMap, setDirectMap] = useState({});
+  const [patternMap, setPatternMap] = useState({});
+  const [variantsMap, setVariantsMap] = useState({});
+  const [inputValue, setInputValue] = useState('');
   const [query, setQuery] = useState('');
-  const [mode, setMode] = useState('part2char');
+  const [mode, setMode] = useState('part2char'); // 'part2char' or 'char2part'
   const [result, setResult] = useState([]);
+  const [page, setPage] = useState(1);
 
-  // 再帰的に分解をフラット化するユーティリティ
-  const buildFlatMap = (map) => {
-    const cache = {};
-    const dfs = (kanji) => {
-      if (cache[kanji]) return cache[kanji];
-      // 初回呼び出し時に空の Set をキャッシュに登録しておく（循環防止）
-      const all = new Set();
-      cache[kanji] = all;
-      const direct = map[kanji] || [];
-      direct.forEach(p => {
-        all.add(p);
-        if (map[p]) {
-          dfs(p).forEach(x => all.add(x));
-        }
-      });
-      return all;
-    };
-    Object.keys(map).forEach(k => dfs(k));
-    return cache;
+  const MAX_DISPLAY = 100;
 
-  };
+  // Reset page when query or mode changes
+  useEffect(() => {
+    setPage(1);
+  }, [query, mode]);
 
-  // JSON を並列フェッチしてマップを正規化
+  // Handle search
+  const handleSearch = () => setQuery(inputValue.trim());
+  const handleKeyDown = e => { if (e.key === 'Enter') handleSearch(); };
+
+  // Load initial data
   useEffect(() => {
     const base = process.env.PUBLIC_URL || '';
     Promise.all([
-      fetch(`${base}/cjkvi_decomp_resolved.json`).then(res => res.ok ? res.json() : Promise.reject(res)),
-      fetch(`${base}/variants.json`).then(res => res.ok ? res.json() : Promise.reject(res))
-    ])
-    .then(([decompJson, variantsJson]) => {
-      // 正規化関数
-      const normalize = ch => {
-        const bases = variantsJson.byVariant[ch];
-        return bases ? bases[0] : ch;
-      };
-      // 直接部品マップと異体字マップをセット
-      setVariants(variantsJson);
-      // 部品マップを正規化
-      const normalized = {};
-      Object.entries(decompJson).forEach(([kanji, parts]) => {
-        normalized[kanji] = parts.map(normalize);
-      });
-      setDecomp(normalized);
-    })
-    .catch(err => console.error('JSON読み込み失敗:', err));
+      fetch(`${base}/direct_decomp.json`).then(r => r.json()),
+      fetch(`${base}/pattern_decomp.json`).then(r => r.json()),
+      fetch(`${base}/variants.json`).then(r => r.json())
+    ]).then(([direct, patterns, variants]) => {
+      setDirectMap(direct);
+      setPatternMap(patterns);
+      setVariantsMap(variants.byBase || {});
+    }).catch(err => console.error('データ読み込みエラー:', err));
   }, []);
 
-  // 入力・モード・マップ変更時に検索
+  // Perform search
   useEffect(() => {
-    const rawChars = Array.from(query).filter(ch => /\p{Script=Han}/u.test(ch));
-    if (rawChars.length === 0) {
+    if (!query) {
       setResult([]);
       return;
     }
-    // 各文字の原字+異体字一覧を作成
-    const variantGroups = rawChars.map(ch => [ch, ...(variants.byVariant[ch] || [])]);
-    // フラットマップを一度だけ作成
-    const flatMap = buildFlatMap(decomp);
-    // 入力の全組み合わせ（直積）を生成
-    const combos = variantGroups.reduce((acc, arr) => {
-      if (acc.length === 0) return arr.map(x => [x]);
-      return acc.flatMap(prev => arr.map(x => [...prev, x]));
-    }, []);
-    let matches = [];
-
-    if (mode === 'part2char') {
-      // 部品→漢字: 組み合わせのいずれかをすべて含む漢字を返す
-      matches = Object.entries(flatMap)
-        .filter(([, leafSet]) => combos.some(combo => combo.every(p => leafSet.has(p))))
-        .map(([kanji]) => kanji);
-    } else {
-      // 漢字→部品: 最初の文字の直接部品を返す
-      const first = rawChars[0];
-      matches = decomp[first] || [];
+    const rawParts = Array.from(query).filter(ch => /\p{Script=Han}/u.test(ch));
+    if (rawParts.length === 0) {
+      setResult([]);
+      return;
     }
 
-    setResult(matches);
-  }, [query, mode, decomp, variants]);
+    if (mode === 'part2char') {
+      // 部品→漢字（重複部品も対応）
+      const needCounts = rawParts.reduce((m, p) => { m[p] = (m[p] || 0) + 1; return m; }, {});
+      const found = new Set();
+      Object.entries(patternMap).forEach(([kanji, patterns]) => {
+        for (const patArr of patterns) {
+          let ok = true;
+          for (const [part, cnt] of Object.entries(needCounts)) {
+            const have = patArr.reduce((n, x) => x === part ? n + 1 : n, 0);
+            if (have < cnt) { ok = false; break; }
+          }
+          if (ok) { found.add(kanji); break; }
+        }
+      });
+      // 入力が1文字のとき、その文字（部品）も結果に含める
+      if (rawParts.length === 1) {
+        found.add(rawParts[0]);
+      }
+      setResult(Array.from(found));
+
+    } else {
+      // 漢字→部品
+      const target = query[0];
+      const parts = directMap[target] || [];
+      setResult([target, ...parts]);
+    }
+  }, [query, mode, patternMap, directMap]);
+
+  // Determine which results to display
+  const visibleResults = mode === 'part2char'
+    ? result.slice(0, page * MAX_DISPLAY)
+    : result;
 
   return (
     <div className="app-container">
@@ -96,25 +88,52 @@ function App() {
         <div className="modes">
           <label>
             <input type="radio" name="mode" value="part2char"
-              checked={mode === 'part2char'} onChange={() => setMode('part2char')} /> 部品 → 漢字
+              checked={mode === 'part2char'}
+              onChange={() => setMode('part2char')} />
+            部品 → 漢字
           </label>
           <label>
             <input type="radio" name="mode" value="char2part"
-              checked={mode === 'char2part'} onChange={() => setMode('char2part')} /> 漢字 → 部品
+              checked={mode === 'char2part'}
+              onChange={() => setMode('char2part')} />
+            漢字 → 部品
           </label>
         </div>
-        <input className="search-input" value={query}
-          onChange={e => setQuery(e.target.value)}
-          placeholder={mode==='part2char' ? '部品となる漢字を入力' : '分解する漢字を入力'} />
+        <div className="search-box">
+          <input
+            className="search-input"
+            type="text"
+            value={inputValue}
+            onChange={e => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={mode === 'part2char' ? '部品を連続入力 例: 口口品' : '漢字を入力'}
+          />
+          <button className="search-button" onClick={handleSearch}>検索</button>
+        </div>
       </div>
-      <ul className="result-list">
-        {result.length > 0 ? result.map((ch,i)=><li key={i}>{ch}</li>)
-          : <li className="no-data">{query===''?'入力待ち...':'該当なし'}</li>}
-      </ul>
+
+      <div className="result-section">
+        {mode === 'char2part' ? (
+          <ul className="result-list">
+            {visibleResults.length > 0 ? visibleResults.map((c, i) => <li key={i}>{c}</li>)
+              : <li className="no-data">{!query ? '入力待ち...' : '該当なし'}</li>}
+          </ul>
+        ) : (
+          <>
+            <ul className="result-list">
+              {visibleResults.length > 0 ? visibleResults.map((k, i) => <li key={i}>{k}</li>)
+                : <li className="no-data">{!query ? '入力待ち...' : '該当なし'}</li>}
+            </ul>
+            {result.length > page * MAX_DISPLAY && (
+              <button className="more-button" onClick={() => setPage(page + 1)}>
+                その他
+              </button>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
 
 export default App;
-
-
