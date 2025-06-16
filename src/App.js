@@ -48,6 +48,16 @@ function App() {
           fetch(`${base}/old_to_new_kanjis.json`).then(r => r.json())
         ]);
         setDirectMap(direct);
+        setVariantsMap(variants.byBase || {});
+        // 常用漢字セット
+        const joyoChars = Object.values(joyoData).map(e => e.joyo_kanji);
+        setJoyoSet(new Set(joyoChars));
+        // 旧字体セット
+        const kyuChars = Object.keys(oldToNew);
+        setKyuSet(new Set(kyuChars));
+        // 日本漢字 = 常用 + 旧字体
+        setJpAllSet(new Set([...joyoChars, ...kyuChars]));
+        // pattern_chunks マージ
         const merged = {};
         for (let i = 1; i <= 20; i++) {
           const idx = String(i).padStart(2, '0');
@@ -57,16 +67,6 @@ function App() {
           Object.assign(merged, chunk);
         }
         setPatternMap(merged);
-        setVariantsMap(variants.byBase || {});
-
-        // 常用漢字
-        const joyoChars = Object.values(joyoData).map(e => e.joyo_kanji);
-        setJoyoSet(new Set(joyoChars));
-        // 旧字体
-        const kyuChars = Object.keys(oldToNew);
-        setKyuSet(new Set(kyuChars));
-        // 日本漢字
-        setJpAllSet(new Set([...joyoChars, ...kyuChars]));
       } catch (err) {
         console.error('データ読み込みエラー:', err);
       }
@@ -86,6 +86,7 @@ function App() {
 
     let candidates = [];
     if (mode === 'part2char') {
+      // 部品→漢字
       const needCounts = rawParts.reduce((acc, p) => { acc[p] = (acc[p] || 0) + 1; return acc; }, {});
       const found = new Set();
       Object.entries(patternMap).forEach(([kanji, patterns]) => {
@@ -101,8 +102,10 @@ function App() {
       if (rawParts.length === 1) found.add(rawParts[0]);
       candidates = Array.from(found);
     } else {
+      // 漢字→部品
       const parts = directMap[query[0]] || [];
-      candidates = parts;
+      // 漢字以外の要素（アルファベットや記号）を除外
+      candidates = parts.filter(ch => /\p{Script=Han}/u.test(ch));
     }
 
     const scored = candidates.map(kanji => {
@@ -145,29 +148,16 @@ function App() {
           </div>
         )}
         <div className="search-box">
-          <input
-            className="search-input"
-            type="text"
-            value={inputValue}
-            onChange={e => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={mode==='part2char'?'部品入力':'漢字入力'}
-          />
+          <input className="search-input" type="text" value={inputValue} onChange={e=>setInputValue(e.target.value)} onKeyDown={handleKeyDown} placeholder={mode==='part2char'?'部品入力':'漢字入力'} />
           <button className="search-button" onClick={handleSearch}>検索</button>
           {query && <span className="search-info">検索ワード: {query}</span>}
         </div>
       </div>
       <div className="result-section">
         <ul className="result-list">
-          {visibleResults.length>0 ? (
-            visibleResults.map((k,i)=><li key={i}>{k}</li>)
-          ) : (
-            <li className="no-data">{!query?'入力待ち...':'該当なし'}</li>
-          )}
+          {visibleResults.length>0 ? visibleResults.map((k,i)=><li key={i}>{k}</li>) : <li className="no-data">{!query?'入力待ち...':'該当なし'}</li>}
         </ul>
-        {mode==='part2char' && remaining>0 && (
-          <button className="more-button" onClick={()=>setPage(page+1)}>その他 ({remaining}件)</button>
-        )}
+        {mode==='part2char' && remaining>0 && <button className="more-button" onClick={()=>setPage(page+1)}>その他 ({remaining}件)</button>}
       </div>
     </div>
   );
