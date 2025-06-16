@@ -144,3 +144,21 @@
 .more-button:hover {
   background-color: #218838;
 }
+
+/* 検索ボックス全体に余白と中央揃えを追加 */
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;   /* ボタンとテキストの間を均等にあける */
+}
+
+/* すでにある .search-button の margin-left は不要になるので削除 or 上書き */
+.search-button {
+  margin-left: 0; /* 元の margin-left:0.5rem をリセット */
+}
+
+/* 検索ワード表示 */
+.search-info {
+  font-size: 0.9rem;
+  color: #555;
+}
