@@ -143,3 +143,38 @@
 .more-button:hover {
   background-color: #117a8b;
 }
+
+/* Result links */
+.result-list li a {
+  color: #007bff;
+  text-decoration: none;
+  display: inline-block;
+  padding: 0.5rem;
+  transition: color 0.2s, background-color 0.2s;
+}
+.result-list li a:hover {
+  text-decoration: underline;
+  background-color: #eef5ff;
+}
+
+/* Mode Toggle Links */
+.modes a {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+  color: #333;
+  text-decoration: none;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+.modes a:hover {
+  background-color: #e9ecef;
+}
+.modes a.active {
+  background-color: #007bff;
+  color: #fff;
+  border-color: #007bff;
+}
