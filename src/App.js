@@ -6,23 +6,21 @@ function App() {
   const [patternMap, setPatternMap] = useState({});
   const [variantsMap, setVariantsMap] = useState({});
   const [inputValue, setInputValue] = useState('');
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(''); // 実際に検索した文字列
   const [mode, setMode] = useState('part2char'); // 'part2char' or 'char2part'
   const [result, setResult] = useState([]);
   const [page, setPage] = useState(1);
 
   const MAX_DISPLAY = 100;
 
-  // Reset pagination on query/mode change
-  useEffect(() => {
+  // 検索実行時にクエリ保存 & ページリセット
+  const handleSearch = () => {
+    setQuery(inputValue.trim());
     setPage(1);
-  }, [query, mode]);
-
-  // Trigger search
-  const handleSearch = () => setQuery(inputValue.trim());
+  };
   const handleKeyDown = e => { if (e.key === 'Enter') handleSearch(); };
 
-  // Load data on mount
+  // 初期データ読み込み
   useEffect(() => {
     const base = process.env.PUBLIC_URL || '';
     async function loadData() {
@@ -34,7 +32,6 @@ function App() {
         setDirectMap(direct);
         setVariantsMap(vdata.byBase || {});
 
-        // Merge pattern chunks
         const merged = {};
         for (let i = 1; i <= 20; i++) {
           const idx = String(i).padStart(2, '0');
@@ -51,14 +48,13 @@ function App() {
     loadData();
   }, []);
 
-  // Perform search when query or data changes
+  // query, mode, or data 変更時に検索実行
   useEffect(() => {
     if (!query) { setResult([]); return; }
     const rawParts = Array.from(query).filter(ch => /\p{Script=Han}/u.test(ch));
     if (!rawParts.length) { setResult([]); return; }
 
     if (mode === 'part2char') {
-      // 部品→漢字: treat input parts as atomic
       const needCounts = rawParts.reduce((acc, p) => {
         acc[p] = (acc[p] || 0) + 1;
         return acc;
@@ -75,24 +71,26 @@ function App() {
           if (ok) { found.add(kanji); break; }
         }
       });
-      // For single-part input, include the part itself
+      // 単一部品なら自身も含める
       if (rawParts.length === 1) {
         found.add(rawParts[0]);
       }
       setResult(Array.from(found));
 
     } else {
-      // 漢字→部品: include the character itself first
       const target = query[0];
       const parts = directMap[target] || [];
       setResult([target, ...parts]);
     }
   }, [query, mode, patternMap, directMap]);
 
-  // Paginate results for 部品→漢字
+  // 表示件数・残余件数
   const visibleResults = mode === 'part2char'
     ? result.slice(0, page * MAX_DISPLAY)
     : result;
+  const remaining = mode === 'part2char'
+    ? result.length - visibleResults.length
+    : 0;
 
   return (
     <div className="app-container">
@@ -127,45 +125,36 @@ function App() {
             value={inputValue}
             onChange={e => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={
-              mode === 'part2char'
-                ? '部品を連続入力 例: 口口品'
-                : '漢字を入力'
-            }
+            placeholder={mode === 'part2char' ? '部品を連続入力 例: 口口品' : '漢字を入力'}
           />
-          <button
-            className="search-button"
-            onClick={handleSearch}
-          >検索</button>
+          <button className="search-button" onClick={handleSearch}>検索</button>
+          {query && (
+            <span className="search-info">検索ワード: {query}</span>
+          )}
         </div>
       </div>
+
       <div className="result-section">
         {mode === 'char2part' ? (
           <ul className="result-list">
-            {visibleResults.length > 0 ? (
-              visibleResults.map((c, i) => <li key={i}>{c}</li>)
-            ) : (
-              <li className="no-data">
-                {!query ? '入力待ち...' : '該当なし'}
-              </li>
-            )}
+            {visibleResults.length > 0
+              ? visibleResults.map((c, i) => <li key={i}>{c}</li>)
+              : <li className="no-data">{!query ? '入力待ち...' : '該当なし'}</li>
+            }
           </ul>
         ) : (
           <>
             <ul className="result-list">
-              {visibleResults.length > 0 ? (
-                visibleResults.map((k, i) => <li key={i}>{k}</li>)
-              ) : (
-                <li className="no-data">
-                  {!query ? '入力待ち...' : '該当なし'}
-                </li>
-              )}
+              {visibleResults.length > 0
+                ? visibleResults.map((k, i) => <li key={i}>{k}</li>)
+                : <li className="no-data">{!query ? '入力待ち...' : '該当なし'}</li>
+              }
             </ul>
-            {result.length > page * MAX_DISPLAY && (
+            {remaining > 0 && (
               <button
                 className="more-button"
                 onClick={() => setPage(page + 1)}
-              >その他</button>
+              >その他 ({remaining}件)</button>
             )}
           </>
         )}
