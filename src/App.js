@@ -1,75 +1,85 @@
-// 20250613
-
 import React, { useState, useEffect } from 'react';
 import './App.css';
 
 function App() {
-  const [direct, setDirect] = useState({});
-  const [variants, setVariants] = useState({ byVariant: {} });
-  const [flat, setFlat] = useState({});
+  const [directMap, setDirectMap] = useState({});
+  const [patternMap, setPatternMap] = useState({});
+  const [variantsMap, setVariantsMap] = useState({});
   const [inputValue, setInputValue] = useState('');
   const [query, setQuery] = useState('');
-  const [mode, setMode] = useState('part2char');
+  const [mode, setMode] = useState('part2char'); // 'part2char' or 'char2part'
   const [result, setResult] = useState([]);
+  const [page, setPage] = useState(1);
 
-  // 入力確定（Enter or ボタン）
+  const MAX_DISPLAY = 100;
+
+  // Reset page when query or mode changes
+  useEffect(() => {
+    setPage(1);
+  }, [query, mode]);
+
+  // Handle search
   const handleSearch = () => setQuery(inputValue.trim());
-  const handleKeyDown = e => {
-    if (e.key === 'Enter') handleSearch();
-  };
+  const handleKeyDown = e => { if (e.key === 'Enter') handleSearch(); };
 
-  // JSON読み込み
+  // Load initial data
   useEffect(() => {
     const base = process.env.PUBLIC_URL || '';
     Promise.all([
-      fetch(`${base}/direct_decomp.json`).then(r => r.ok ? r.json() : Promise.reject(r)),
-      fetch(`${base}/variants.json`).then(r => r.ok ? r.json() : Promise.reject(r)),
-      fetch(`${base}/flat_decomp.json`).then(r => r.ok ? r.json() : Promise.reject(r))
-    ])
-      .then(([directJson, variantsJson, flatJson]) => {
-        setDirect(directJson);
-        setVariants(variantsJson);
-        setFlat(flatJson);
-      })
-      .catch(err => console.error('JSON読み込み失敗:', err));
+      fetch(`${base}/direct_decomp.json`).then(r => r.json()),
+      fetch(`${base}/pattern_decomp.json`).then(r => r.json()),
+      fetch(`${base}/variants.json`).then(r => r.json())
+    ]).then(([direct, patterns, variants]) => {
+      setDirectMap(direct);
+      setPatternMap(patterns);
+      setVariantsMap(variants.byBase || {});
+    }).catch(err => console.error('データ読み込みエラー:', err));
   }, []);
 
-  // 検索ロジック
+  // Perform search
   useEffect(() => {
     if (!query) {
       setResult([]);
       return;
     }
-    // 漢字のみ抽出・正規化
-    const normalize = ch => {
-      const base = variants.byVariant[ch];
-      return base ? base[0] : ch;
-    };
-    const rawParts = Array.from(query)
-      .filter(ch => /\p{Script=Han}/u.test(ch))
-      .map(normalize);
+    const rawParts = Array.from(query).filter(ch => /\p{Script=Han}/u.test(ch));
     if (rawParts.length === 0) {
       setResult([]);
       return;
     }
 
-    let matches = [];
     if (mode === 'part2char') {
-      // 部品→漢字モード: 部品ごとの候補を取得し、AND条件(交差)で絞り込み
-      const lists = rawParts.map(p => flat[p] || []);
-      if (lists.length > 0) {
-        matches = lists.reduce(
-          (acc, cur) => acc.filter(k => cur.includes(k)),
-          lists[0]
-        );
+      // 部品→漢字（重複部品も対応）
+      const needCounts = rawParts.reduce((m, p) => { m[p] = (m[p] || 0) + 1; return m; }, {});
+      const found = new Set();
+      Object.entries(patternMap).forEach(([kanji, patterns]) => {
+        for (const patArr of patterns) {
+          let ok = true;
+          for (const [part, cnt] of Object.entries(needCounts)) {
+            const have = patArr.reduce((n, x) => x === part ? n + 1 : n, 0);
+            if (have < cnt) { ok = false; break; }
+          }
+          if (ok) { found.add(kanji); break; }
+        }
+      });
+      // 入力が1文字のとき、その文字（部品）も結果に含める
+      if (rawParts.length === 1) {
+        found.add(rawParts[0]);
       }
-    } else {
-      // 漢字→部品モード: directマップそのまま
-      matches = direct[rawParts[0]] || [];
-    }
+      setResult(Array.from(found));
 
-    setResult(matches);
-  }, [query, mode, direct, variants, flat]);
+    } else {
+      // 漢字→部品
+      const target = query[0];
+      const parts = directMap[target] || [];
+      setResult([target, ...parts]);
+    }
+  }, [query, mode, patternMap, directMap]);
+
+  // Determine which results to display
+  const visibleResults = mode === 'part2char'
+    ? result.slice(0, page * MAX_DISPLAY)
+    : result;
 
   return (
     <div className="app-container">
@@ -77,23 +87,15 @@ function App() {
       <div className="controls">
         <div className="modes">
           <label>
-            <input
-              type="radio"
-              name="mode"
-              value="part2char"
+            <input type="radio" name="mode" value="part2char"
               checked={mode === 'part2char'}
-              onChange={() => setMode('part2char')}
-            />
+              onChange={() => setMode('part2char')} />
             部品 → 漢字
           </label>
           <label>
-            <input
-              type="radio"
-              name="mode"
-              value="char2part"
+            <input type="radio" name="mode" value="char2part"
               checked={mode === 'char2part'}
-              onChange={() => setMode('char2part')}
-            />
+              onChange={() => setMode('char2part')} />
             漢字 → 部品
           </label>
         </div>
@@ -104,26 +106,32 @@ function App() {
             value={inputValue}
             onChange={e => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={
-              mode === 'part2char'
-                ? '部品となる漢字を入力'
-                : '分解する漢字を入力'
-            }
+            placeholder={mode === 'part2char' ? '部品を連続入力 例: 口口品' : '漢字を入力'}
           />
-          <button className="search-button" onClick={handleSearch}>
-            検索
-          </button>
+          <button className="search-button" onClick={handleSearch}>検索</button>
         </div>
       </div>
-      <ul className="result-list">
-        {result.length > 0 ? (
-          result.map((k, i) => <li key={i}>{k}</li>)
+
+      <div className="result-section">
+        {mode === 'char2part' ? (
+          <ul className="result-list">
+            {visibleResults.length > 0 ? visibleResults.map((c, i) => <li key={i}>{c}</li>)
+              : <li className="no-data">{!query ? '入力待ち...' : '該当なし'}</li>}
+          </ul>
         ) : (
-          <li className="no-data">
-            {!query ? '入力待ち...' : '該当なし'}
-          </li>
+          <>
+            <ul className="result-list">
+              {visibleResults.length > 0 ? visibleResults.map((k, i) => <li key={i}>{k}</li>)
+                : <li className="no-data">{!query ? '入力待ち...' : '該当なし'}</li>}
+            </ul>
+            {result.length > page * MAX_DISPLAY && (
+              <button className="more-button" onClick={() => setPage(page + 1)}>
+                その他
+              </button>
+            )}
+          </>
         )}
-      </ul>
+      </div>
     </div>
   );
 }

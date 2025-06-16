@@ -78,11 +78,11 @@
   border-radius: 4px;
 }
 
+/* 結果リストを左詰めに */
 .result-list {
-  list-style: none;
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-start; /* <- 中央揃えから左揃えに変更 */
   padding: 0;
 }
 
@@ -93,6 +93,10 @@
   background: #fff;
   border: 1px solid #ddd;
   border-radius: 4px;
+}
+
+.result-list li::marker {
+  content: "";         /* マーカー自体の内容を空に */
 }
 
 .result-list .no-data {
@@ -121,4 +125,22 @@
 
 .search-button:hover {
   background-color: #0056b3;
+}
+
+/* 「その他」ボタンのスタイル */
+.more-button {
+  font-size: 1rem;
+  padding: 0.5rem 1rem;
+  margin: 1rem auto 0 auto;
+  display: block;
+  background-color: #28a745;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.more-button:hover {
+  background-color: #218838;
 }
