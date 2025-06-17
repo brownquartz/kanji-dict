@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import DetailsPage from './DetailsPage';
-import './App.css';
+import './MainApp.css';
 
 // Score calculation (match rate + exact match bonus)
 function calculateScore(patternArray, inputParts) {
@@ -159,7 +159,22 @@ export default function MainApp() {
   // Main render
   return (
     <div className="app-container">
-      <h1 className="header">漢字分解・組み立て検索</h1>
+      <h1 className="header">
+        漢字分解・組み立て検索
+        <span className="info-icon">ⓘ
+          <div className="tooltip">
+            部品を簡単に組み立てて、
+            入力した部品と一番近い漢字を出力します。
+            ex: "口口口" ⇒ "品臨器操燥繰藻"、
+                "水也" ⇒ "池"、
+                "角刀牛" ⇒ "解"
+          </div>
+        </span>
+      </h1>
+      {/* Logo image under the title */}
+      {/* <div className="logo-container">
+        <img src={`${process.env.PUBLIC_URL}/images/logo.png`} alt="Kanji-Dict Logo" className="logo" />
+      </div> */}
       <div className="controls">
         <div className="modes">
           <button
@@ -180,11 +195,11 @@ export default function MainApp() {
             <button
               className={region === 'japanese' ? 'active' : ''}
               onClick={() => setRegion('japanese')}
-            >日本漢字</button>
+            >+表外漢字</button>
             <button
               className={region === 'chinese' ? 'active' : ''}
               onClick={() => setRegion('chinese')}
-            >中国漢字</button>
+            >+中国漢字</button>
           </div>
         )}
         <div className="search-section">

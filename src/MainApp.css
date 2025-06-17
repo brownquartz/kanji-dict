@@ -1,0 +1,273 @@
+/* Core Layout */
+.app-container {
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 1rem;
+  background: #f9f9f9;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  font-family: 'Segoe UI', Roboto, sans-serif;
+}
+
+.header {
+  text-align: center;
+  font-size: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+/* Mode Toggle Buttons */
+.modes {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.modes button {
+  padding: 0.5rem 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+.modes button:hover {
+  background-color: #e9ecef;
+}
+.modes button.active {
+  background-color: #007bff;
+  color: #fff;
+  border-color: #007bff;
+}
+
+/* Region Filter Buttons */
+.region-filter {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.region-filter button {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+.region-filter button:hover {
+  background-color: #e9ecef;
+}
+.region-filter button.active {
+  background-color: #28a745;
+  color: #fff;
+  border-color: #28a745;
+}
+
+/* 検索フォーム＋ワードの縦レイアウト＋中央揃え */
+.search-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;   /* 中央寄せ */
+  gap: 0.5rem;           /* フォームとワードの間隔 */
+  margin-top: 1rem;
+}
+
+/* フォーム部分は横並び */
+.search-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* 検索ワードはフォーム幅に合わせたいなら下記で幅を設定 */
+.search-info {
+  font-size: 0.9rem;
+  color: #666;
+  /* width: max-content;  必要ならフォーム幅と同じ横幅に */
+}
+
+.search-input {
+  font-size: 1.25rem;
+  padding: 0.5rem;
+  width: 200px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+.search-button {
+  padding: 0.5rem 1rem;
+  border: 1px solid #007bff;
+  border-radius: 4px;
+  background-color: #007bff;
+  color: #fff;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.search-button:hover {
+  background-color: #0056b3;
+}
+
+/* Results List */
+.result-section .result-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start; /* 左から詰める */
+  gap: 0.5rem;
+}
+
+.result-section .result-list li {
+  /* font-size: 2rem; */
+  margin: 0;
+  padding: 0;  
+  width: 3rem;
+  height: 3rem;
+  background: #ffffff;          /* 薄い水色背景 */
+  color: #0050b3;               /* 濃い青文字 */
+  border: 1px solid #91d5ff;    /* やや濃い水色ボーダー */
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.result-section .result-list li:hover {
+  background: #f5f5f5;
+  transform: translateY(-2px);
+}
+
+.result-section {
+  margin-top: 1rem;
+}
+.result-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(3rem, 1fr));
+  gap: 0.5rem;
+}
+.result-list li {
+  font-size: 2rem;
+  margin: 0.5rem;
+  padding: 0.5rem;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: default;
+}
+.result-list .no-data {
+  /* 全列をまたがせて中央に配置 */
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: #fffbea;    /* 薄いイエロー背景 */
+  border: 1px solid #ffec3d;
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  color: #ad8b00;         /* やや濃いめのイエロー系文字 */
+  font-style: italic;
+}
+
+/* Result links */
+.result-list li a {
+  color: #007bff;
+  text-decoration: none;
+  display: inline-block;
+  padding: 0.5rem;
+  transition: color 0.2s, background-color 0.2s;
+}
+.result-list li a:hover {
+  text-decoration: underline;
+  background-color: #eef5ff;
+}
+
+.no-data {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem;
+  background: #fffbea;
+  border: 1px solid #ffec3d;
+  border-radius: 4px;
+}
+
+.no-data__img {
+  max-width: 5rem;
+  margin-bottom: 0.5rem;
+}
+
+/* More Button */
+.more-button {
+  display: block;
+  font-size: 1rem;
+  padding: 0.5rem 1rem;
+  margin: 1rem auto 0;
+  border: none;
+  border-radius: 4px;
+  background-color: #17a2b8;
+  color: #fff;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.more-button:hover {
+  background-color: #117a8b;
+}
+
+/* Mode Toggle Links */
+.modes a {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+  color: #333;
+  text-decoration: none;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+.modes a:hover {
+  background-color: #e9ecef;
+}
+.modes a.active {
+  background-color: #007bff;
+  color: #fff;
+  border-color: #007bff;
+}
+
+.info-icon {
+  margin-left: 8px;
+  cursor: pointer;
+  position: relative;
+  font-size: 0.8em;
+}
+
+.tooltip {
+  display: none;
+  position: absolute;
+  top: 120%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.75);
+  color: #fff;
+  padding: 8px;
+  border-radius: 4px;
+  white-space: pre-line;
+  z-index: 10;
+  width: 400px;
+  text-align: left;
+}
+
+.info-icon:hover .tooltip {
+  display: block;
+}
