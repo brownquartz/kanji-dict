@@ -3,15 +3,15 @@
 
 let directMap = {}, variantMap = {}, patternMap = {}, joyoSet = new Set(), oldNewMap = {};
 
-onmessage = ({ data }) => {
+self.onmessage = ({ data }) => {
+  // ───── 初期化 ─────
   if (data.init) {
-    // 初期データのセット
     directMap   = data.directMap;
     variantMap  = data.variantMap;
     patternMap  = data.patternMap;
     joyoSet     = new Set(data.joyoList);
     oldNewMap   = data.oldNewMap;
-    console.log('◁ worker INIT received:', {
+    console.log('▷ worker INIT received:', {
       directSize: Object.keys(directMap).length,
       variantSize: Object.keys(variantMap).length,
       patternSize: Object.keys(patternMap).length
@@ -19,18 +19,18 @@ onmessage = ({ data }) => {
     return;
   }
 
-  const { parts, mode, region } = data; 
+  const { parts, mode, region } = data;
 
-  // ==== 追加: 単一漢字入力時は directMap で検索 ====
+  // ───── 1. 部品→漢字モード：単一漢字入力の早期返却 ─────
   if (mode === 'partsToKanji' && parts.length === 1) {
     const p = parts[0];
-    // directMap から候補を取得（未定義なら空配列）
+    // directMap から候補を取得（なければ空配列）
     let results = Array.isArray(directMap[p]) ? [...directMap[p]] : [];
-    // 自身を先頭に追加
+    // 「自身」を先頭に挿入
     if (!results.includes(p)) {
-     results.unshift(p);
+      results.unshift(p);
     }
-    // フィルタリング: joyo/japanese
+    // joyo/japanese フィルター
     if (region === 'joyo') {
       results = results.filter(k => joyoSet.has(k));
     } else if (region === 'japanese') {
@@ -40,11 +40,38 @@ onmessage = ({ data }) => {
     return;
   }
 
-  // 0. 部品として見なせない文字は、patternMap で分解して部品に
+  // ───── 2. 漢字→部品モード：全パターンをマージ ─────
+  if (mode === 'kanjiToParts' && parts.length > 0) {
+    const out = [];
+    const seen = new Set();
+
+    // patternMap[漢字] は [ [層1の配列], [層2の配列], ... ]
+    const layers = patternMap[parts.join('')] || [];
+
+    // ⬇︎ 各層ごとに「漢字だけ」をフィルタ
+    const layersKanji = layers.map(layer =>
+      layer.filter(p => p.charCodeAt(0) > 0x007F)
+    );
+    const layers_afterExtKanji = layersKanji;
+
+    layers_afterExtKanji.forEach(layer => {
+      layer.forEach(p => {
+        if (!seen.has(p)) {
+          seen.add(p);
+          out.push(p);
+        }
+      });
+    });
+
+    postMessage({ results: out });
+    return;
+  }
+
+  // ───── 3. 以下、元々の部品→漢字ロジック ─────
+  // 0) patternMap による暗黙の分解
   const expanded = [];
   parts.forEach(p => {
     if (!directMap[p] && patternMap[p]) {
-      // 漢字→部品モードのように最初の分解パターンを使う
       const pats = patternMap[p];
       if (pats.length > 0) expanded.push(...pats[0]);
       else expanded.push(p);
@@ -54,25 +81,20 @@ onmessage = ({ data }) => {
   });
   const rawParts = [...new Set(expanded)];
 
-  // 1. 異体字を含む配列を作成
+  // 1) 異体字も含めた配列を作成
   const variantArrays = rawParts.map(ch => [ch, ...(variantMap[ch] || [])]);
 
-  // 2. 全組み合わせを生成
+  // 2) 全組み合わせを生成
   const cartesianProduct = arrays =>
-    arrays.reduce(
-      (acc, curr) => acc.flatMap(prev => curr.map(item => [...prev, item])),
-      [[]]
-    );
+    arrays.reduce((acc, curr) => acc.flatMap(prev => curr.map(item => [...prev, item])), [[]]);
   const combos = cartesianProduct(variantArrays);
 
-  // 3. 逆引きインデックスで共通候補抽出
+  // 3) 逆引きインデックス（directMap）でマッチ数をカウント
   const matchCountMap = new Map();
   combos.forEach(combo => {
     const sets = combo.map(p => {
       const list = directMap[p];
-      // 未定義 or 空配列 なら 自身のみ fallback
-      const arr = (Array.isArray(list) && list.length > 0) ? list : [p];
-      return new Set(arr);
+      return new Set(Array.isArray(list) && list.length > 0 ? list : [p]);
     });
     if (!sets.length) return;
     const intersection = sets.reduce((a, b) => new Set([...a].filter(k => b.has(k))));
@@ -81,19 +103,18 @@ onmessage = ({ data }) => {
     });
   });
 
-  // 4. 上位100件を抽出
+  // 4) 上位100件を抽出
   const candidates = Array.from(matchCountMap.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, 100)
     .map(([k]) => k);
 
-  // 5. スコア計算
+  // 5) スコア計算
   const calculateScore = (patArr, inParts) => {
-    const onlyHan = patArr.filter(ch => /\p{Script=Han}/u.test(ch));
-    const total = onlyHan.length;
+    const total = patArr.filter(ch => /\p{Script=Han}/u.test(ch)).length;
     if (!total) return 0;
     const cnt = {};
-    inParts.forEach(p => { cnt[p] = (cnt[p] || 0) + 1; });
+    inParts.forEach(x => (cnt[x] = (cnt[x] || 0) + 1));
     let match = 0;
     Object.entries(cnt).forEach(([p, n]) => {
       const occ = patArr.reduce((s, c) => (c === p ? s + 1 : s), 0);
@@ -103,7 +124,6 @@ onmessage = ({ data }) => {
     const exact = patArr.length >= inParts.length && inParts.every((p, i) => patArr[i] === p);
     return rate + (exact ? 50 : 0);
   };
-
   const scored = candidates
     .map(k => {
       const patterns = patternMap[k] || [];
@@ -113,7 +133,7 @@ onmessage = ({ data }) => {
     .sort((a, b) => b.score - a.score)
     .map(x => x.k);
 
-  // 6. フィルタリング
+  // 6) joyo/japanese フィルター
   let filtered = scored;
   if (mode === 'partsToKanji') {
     if (region === 'joyo') {
@@ -121,9 +141,8 @@ onmessage = ({ data }) => {
     } else if (region === 'japanese') {
       filtered = filtered.filter(k => joyoSet.has(k) || oldNewMap[k]);
     }
-    // chinese は制限なし
   }
 
-  // 7. 結果を返却
+  // 7) 最終返却
   postMessage({ results: filtered });
 };

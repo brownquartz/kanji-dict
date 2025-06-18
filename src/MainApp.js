@@ -7,39 +7,6 @@ import './MainApp.css';
 const createSearchWorker = () =>
   new Worker(new URL('./searchWorker.js', import.meta.url), { type: 'module' });
 
-// // スコア計算などのヘルパーは変更なし
-// function calculateScore(patternArray, inputParts) {
-//   const onlyHan = patternArray.filter(ch => /\p{Script=Han}/u.test(ch));
-//   const total = onlyHan.length;
-//   if (total === 0) return 0;
-
-//   const countMap = {};
-//   inputParts.forEach(part => {
-//     countMap[part] = (countMap[part] || 0) + 1;
-//   });
-
-//   let matchCount = 0;
-//   Object.entries(countMap).forEach(([part, cnt]) => {
-//     const occ = patternArray.reduce((n, ch) => (ch === part ? n + 1 : n), 0);
-//     matchCount += Math.min(cnt, occ);
-//   });
-
-//   const rate = (matchCount / total) * 100;
-//   const exact =
-//     patternArray.length >= inputParts.length &&
-//     inputParts.every((p, i) => patternArray[i] === p);
-
-//   return rate + (exact ? 50 : 0);
-// }
-
-// // カルテシアン積も変更なし
-// function cartesianProduct(arrays) {
-//   return arrays.reduce(
-//     (acc, curr) => acc.flatMap(prev => curr.map(item => [...prev, item])),
-//     [[]]
-//   );
-// }
-
 export default function MainApp() {
   // ————— データマップ —————
   const [directMap, setDirectMap] = useState({});
@@ -137,6 +104,8 @@ export default function MainApp() {
   // ————— 検索トリガー & キーイベント —————
   const handleSearch = () => setSearchTerm(inputValue.trim());
   const handleKeyDown = e => { if (e.key === 'Enter') handleSearch(); };
+
+  
 
   // ————— ページネーション用に先頭N件だけ —————
   const visible = results.slice(0, page * MAX_DISPLAY);
