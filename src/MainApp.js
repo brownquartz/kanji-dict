@@ -1,47 +1,54 @@
-import React, { useState, useEffect } from 'react';
+// src/MainApp.js
+import React, { useState, useEffect, useMemo } from 'react';
 import DetailsPage from './DetailsPage';
 import './MainApp.css';
 
-// Score calculation (match rate + exact match bonus)
-function calculateScore(patternArray, inputParts) {
-  const onlyHan = patternArray.filter(ch => /\p{Script=Han}/u.test(ch));
-  const total = onlyHan.length;
-  if (total === 0) return 0;
+// ワーカー読み込み（CRA 5+ の組み込み機能を使う場合）
+const createSearchWorker = () =>
+  new Worker(new URL('./searchWorker.js', import.meta.url), { type: 'module' });
 
-  const countMap = {};
-  inputParts.forEach(part => {
-    countMap[part] = (countMap[part] || 0) + 1;
-  });
+// // スコア計算などのヘルパーは変更なし
+// function calculateScore(patternArray, inputParts) {
+//   const onlyHan = patternArray.filter(ch => /\p{Script=Han}/u.test(ch));
+//   const total = onlyHan.length;
+//   if (total === 0) return 0;
 
-  let matchCount = 0;
-  Object.entries(countMap).forEach(([part, cnt]) => {
-    const occ = patternArray.reduce((n, ch) => (ch === part ? n + 1 : n), 0);
-    matchCount += Math.min(cnt, occ);
-  });
+//   const countMap = {};
+//   inputParts.forEach(part => {
+//     countMap[part] = (countMap[part] || 0) + 1;
+//   });
 
-  const rate = (matchCount / total) * 100;
-  const exact =
-    patternArray.length >= inputParts.length &&
-    inputParts.every((p, i) => patternArray[i] === p);
+//   let matchCount = 0;
+//   Object.entries(countMap).forEach(([part, cnt]) => {
+//     const occ = patternArray.reduce((n, ch) => (ch === part ? n + 1 : n), 0);
+//     matchCount += Math.min(cnt, occ);
+//   });
 
-  return rate + (exact ? 50 : 0);
-}
+//   const rate = (matchCount / total) * 100;
+//   const exact =
+//     patternArray.length >= inputParts.length &&
+//     inputParts.every((p, i) => patternArray[i] === p);
 
-// Generate Cartesian product of arrays
-function cartesianProduct(arrays) {
-  return arrays.reduce(
-    (acc, curr) => acc.flatMap(prev => curr.map(item => [...prev, item])),
-    [[]]
-  );
-}
+//   return rate + (exact ? 50 : 0);
+// }
+
+// // カルテシアン積も変更なし
+// function cartesianProduct(arrays) {
+//   return arrays.reduce(
+//     (acc, curr) => acc.flatMap(prev => curr.map(item => [...prev, item])),
+//     [[]]
+//   );
+// }
 
 export default function MainApp() {
+  // ————— データマップ —————
   const [directMap, setDirectMap] = useState({});
   const [patternMap, setPatternMap] = useState({});
   const [variantMap, setVariantMap] = useState({});
   const [joyoSet, setJoyoSet] = useState(new Set());
   const [oldNewMap, setOldNewMap] = useState({});
 
+  // ————— UIステート —————
   const [inputValue, setInputValue] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [mode, setMode] = useState('partsToKanji');
@@ -49,24 +56,35 @@ export default function MainApp() {
   const [results, setResults] = useState([]);
   const [page, setPage] = useState(1);
   const MAX_DISPLAY = 100;
+  const [detail, setDetail] = useState(null);
 
-  // Load data on mount
+  // ————— Workerインスタンスを一度だけ生成 —————
+  const worker = useMemo(createSearchWorker, []);
+
+  // ————— 1) 初期データ読み込み ── mount時に一度だけ —————
   useEffect(() => {
     const base = process.env.PUBLIC_URL || '';
     (async () => {
-      const directData = await fetch(`${base}/direct_decomp.json`).then(r => r.json());
-      setDirectMap(directData);
 
-      const variantsData = await fetch(`${base}/variants.json`).then(r => r.json());
-      setVariantMap(variantsData.byBase || {});
+      const [d,vdata, jdata, onew] = await Promise.all([
+        fetch(`${base}/flat_decomp.json`).then(r => r.json()),
+        fetch(`${base}/variants.json`).then(r => r.json()),
+        fetch(`${base}/joyo2010.json`).then(r => r.json()),
+        fetch(`${base}/old_to_new_kanjis.json`).then(r => r.json()),
+      ]);
+      // directMap
+      setDirectMap(d);
 
-      const joyoData = await fetch(`${base}/joyo2010.json`).then(r => r.json());
+      // variantMap (byBase のみ)
+      setVariantMap(vdata.byBase || {});
 
-      setJoyoSet(new Set(Object.values(joyoData).map(e => e.joyo_kanji)));
+      // joyoSet
+      setJoyoSet(new Set(Object.values(jdata).map(e => e.joyo_kanji)));
 
-      const oldNewData = await fetch(`${base}/old_to_new_kanjis.json`).then(r => r.json());
-      setOldNewMap(oldNewData);
-
+      // oldNewMap
+      setOldNewMap(onew);
+    
+      // patternMap (全チャンクをマージ)
       const merged = {};
       for (let i = 1; i <= 20; i++) {
         const idx = String(i).padStart(2, '0');
@@ -79,72 +97,52 @@ export default function MainApp() {
     })();
   }, []);
 
-  // Search handlers
-  const handleSearch = () => { setSearchTerm(inputValue.trim()); setPage(1); };
-  const handleKeyDown = e => { if (e.key === 'Enter') handleSearch(); };
+  // ————— 2) Workerに初期データを渡す —————
+  useEffect(() => {
+    // patternMapが空の間はまだ初期化しない
+    if (!Object.keys(patternMap).length) return;
+    worker.postMessage({
+      init: true,
+      directMap,
+      variantMap,
+      patternMap,
+      joyoList: Array.from(joyoSet),
+      oldNewMap,
+    });
+  }, [worker, directMap, variantMap, patternMap, joyoSet, oldNewMap]);
 
-  // Main search effect with detailed logging
+  // ————— 3) 検索語が変わったらWorkerに投げる —————
   useEffect(() => {
     if (!searchTerm) { setResults([]); return; }
-
+    // 漢字だけ抽出
     const rawParts = Array.from(searchTerm).filter(ch => /\p{Script=Han}/u.test(ch));
+    if (!rawParts.length) { setResults([]); return; }
 
-    if (rawParts.length === 0) { setResults([]); return; }
+    worker.postMessage({ parts: rawParts, mode, region });
+  }, [worker, searchTerm, mode, region]);
 
-    // Build variant arrays for all patterns
-    const variantArrays = rawParts.map(ch => [ch, ...(variantMap[ch] || [])]);
-
-    // Generate all combos
-    const combos = cartesianProduct(variantArrays);
-
-    // STEP1: Extract candidates
-    const found = new Set();
-    combos.forEach(combo => {
-      const need = {};
-      combo.forEach(p => { need[p] = (need[p] || 0) + 1; });
-
-      Object.entries(patternMap).forEach(([kanji, decomps]) => {
-        if (decomps.some(dec =>
-          Object.entries(need).every(([p, cnt]) =>
-            dec.filter(x => x === p).length >= cnt
-          )
-        )) {
-          found.add(kanji);
-        }
-      });
-    });
-    if (rawParts.length === 1) found.add(rawParts[0]);
-
-    // STEP2: Scoring
-    const scored = Array.from(found).map(k => {
-      const decomps = patternMap[k] || [];
-      const bestScore = decomps.reduce(
-        (max, arr) => Math.max(max, calculateScore(arr, rawParts)),
-        0
-      );
-      return { k, score: bestScore };
-    }).sort((a, b) => b.score - a.score);
-
-    const scoredList = scored.map(x => x.k);
-
-    // STEP3: Filtering by region
-    let filtered = scoredList;
-    if (mode === 'partsToKanji') {
-      if (region === 'joyo') {
-        filtered = filtered.filter(k => joyoSet.has(k));
-      } else if (region === 'japanese') {
-        filtered = filtered.filter(k => joyoSet.has(k) || oldNewMap[k]);
+  // ————— 4) Workerから結果を受け取る —————
+  useEffect(() => {
+    const handler = e => {
+      const { data } = e;
+      if (data.results) {
+        setResults(data.results);
+        setPage(1);
       }
-    }
+    };
+    worker.addEventListener('message', handler);
+    return () => worker.removeEventListener('message', handler);
+  }, [worker]);
 
-    setResults(filtered);
-  }, [searchTerm, mode, region, patternMap, directMap, joyoSet, oldNewMap, variantMap]);
+  // ————— 検索トリガー & キーイベント —————
+  const handleSearch = () => setSearchTerm(inputValue.trim());
+  const handleKeyDown = e => { if (e.key === 'Enter') handleSearch(); };
 
-  // Pagination and detail view
+  // ————— ページネーション用に先頭N件だけ —————
   const visible = results.slice(0, page * MAX_DISPLAY);
   const moreCount = results.length - visible.length;
-  const [detail, setDetail] = useState(null);
 
+  // ————— 詳細モード —————
   if (detail) {
     return (
       <div className="app-container">
@@ -156,24 +154,20 @@ export default function MainApp() {
     );
   }
 
-  // Main render
+  // ————— UIレンダー —————
   return (
     <div className="app-container">
       <h1 className="header">
         漢字分解・組み立て検索
         <span className="info-icon">ⓘ
           <div className="tooltip">
-            部品を簡単に組み立てて、
-            入力した部品と一番近い漢字を出力します。
-            ex: "口口口" ⇒ "品臨器操燥繰藻"、
-                "水也" ⇒ "池"、
-                "角刀牛" ⇒ "解"
+            部品を簡単に組み立てて、入力した部品と一番近い漢字を出力します。
+            ex: "口口口" ⇒ "品臨器操燥繰藻"、"水也" ⇒ "池"、"角刀牛" ⇒ "解"
           </div>
         </span>
       </h1>
-      {/* Logo image under the title */}
       {/* <div className="logo-container">
-        <img src={`${process.env.PUBLIC_URL}/images/logo.png`} alt="Kanji-Dict Logo" className="logo" />
+        <img src={`${process.env.PUBLIC_URL}/images/logo.png`} alt="Logo" className="logo" />
       </div> */}
       <div className="controls">
         <div className="modes">
@@ -226,7 +220,7 @@ export default function MainApp() {
             ))
           ) : (
             <li className="no-data">
-              {searchTerm ? 'X' : '.'}
+              {searchTerm ? '該当する漢字がありません。' : '漢字または部品を入力してください。'}
             </li>
           )}
         </ul>
