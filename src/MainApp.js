@@ -128,11 +128,27 @@ export default function MainApp() {
     <div className="app-container">
       <h1 className="header">
         漢字分解・組み立て検索
-        <span className="info-icon">ⓘ
+        <span className={`info-icon ${mode}`}>ⓘ
+          { mode === 'partsToKanji' && (
           <div className="tooltip">
-            部品を簡単に組み立てて、入力した部品と一番近い漢字を出力します。
-            ex: "口口口" ⇒ "品臨器操燥繰藻"、"水也" ⇒ "池"、"角刀牛" ⇒ "解"
+            {`入力部品を組み立てて、
+            一番近い漢字を出力します。
+            ex) "口口口" ⇒ "品臨器操燥繰藻"
+                "水也" ⇒ "池"
+                "角刀牛" ⇒ "解"
+            `}
           </div>
+          )}
+          { mode === 'kanjiToParts' && (
+          <div className="tooltip">
+            {`漢字を複数層で分けて、
+            全要素を重複なしで出力します。
+            ex) "嘔" ⇒ "口區匸品"
+            "池" ⇒ "氵也"
+            "解" ⇒ "刀牛角丿𠃌"
+            `}
+          </div>
+          )}
         </span>
       </h1>
       {/* <div className="logo-container">

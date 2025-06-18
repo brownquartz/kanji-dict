@@ -250,6 +250,21 @@
   cursor: pointer;
   position: relative;
   font-size: 0.8em;
+  color : #888;
+}
+
+/* 部品→漢字モード：オレンジ */
+.info-icon.partsToKanji {
+  color: #f28e2b;  /* オレンジ系 */
+}
+
+/* 漢字→部品モード：ブルー */
+.info-icon.kanjiToParts {
+  color: #4e79a7;  /* ブルー系 */
+}
+
+.info-icon:hover .tooltip {
+  display: block;
 }
 
 .tooltip {
@@ -264,10 +279,8 @@
   border-radius: 4px;
   white-space: pre-line;
   z-index: 10;
-  width: 400px;
+  width: 450px;
   text-align: left;
-}
-
-.info-icon:hover .tooltip {
-  display: block;
+  /* 文字列をそのまま表示するため */
+  white-space: pre-line;
 }
