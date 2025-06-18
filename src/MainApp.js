@@ -14,6 +14,7 @@ export default function MainApp() {
   const [variantMap, setVariantMap] = useState({});
   const [joyoSet, setJoyoSet] = useState(new Set());
   const [oldNewMap, setOldNewMap] = useState({});
+  const [patternIndex, setPatternIndex] = useState(null);
 
   // ————— UIステート —————
   const [inputValue, setInputValue] = useState('');
@@ -33,11 +34,12 @@ export default function MainApp() {
     const base = process.env.PUBLIC_URL || '';
     (async () => {
 
-      const [d,vdata, jdata, onew] = await Promise.all([
+      const [d,vdata, jdata, onew, patternIndex] = await Promise.all([
         fetch(`${base}/flat_decomp.json`).then(r => r.json()),
         fetch(`${base}/variants.json`).then(r => r.json()),
         fetch(`${base}/joyo2010.json`).then(r => r.json()),
         fetch(`${base}/old_to_new_kanjis.json`).then(r => r.json()),
+        fetch(`${base}/pattern_index.json`).then(r => r.json()),
       ]);
       // directMap
       setDirectMap(d);
@@ -50,11 +52,13 @@ export default function MainApp() {
 
       // oldNewMap
       setOldNewMap(onew);
+
+      setPatternIndex(patternIndex);
     
-      // patternMap (全チャンクをマージ)
+      // patternMap をマージ（patternIndex からチャンク番号を取得して動的ロード）
       const merged = {};
-      for (let i = 1; i <= 20; i++) {
-        const idx = String(i).padStart(2, '0');
+      const seen = new Set(Object.values(patternIndex));
+      for (const idx of seen) {
         const chunk = await fetch(
           `${base}/pattern_chunks/pattern_decomp_${idx}.json`
         ).then(r => r.json());
@@ -205,7 +209,7 @@ export default function MainApp() {
             ))
           ) : (
             <li className="no-data">
-              {searchTerm ? '該当する漢字がありません。' : '漢字または部品を入力してください。'}
+              {searchTerm ? 'X' : '.'}
             </li>
           )}
         </ul>

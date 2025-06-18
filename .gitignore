@@ -21,3 +21,7 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# no-need files
+/public/_pattern_decomp.json
+/public/_direct_decomp.json

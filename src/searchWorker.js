@@ -3,6 +3,8 @@
 
 let directMap = {}, variantMap = {}, patternMap = {}, joyoSet = new Set(), oldNewMap = {};
 
+const MAX_CANDIDATES = 100; // 上位100件を抽出
+
 self.onmessage = ({ data }) => {
   // ───── 初期化 ─────
   if (data.init) {
@@ -104,10 +106,55 @@ self.onmessage = ({ data }) => {
   });
 
   // 4) 上位100件を抽出
-  const candidates = Array.from(matchCountMap.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 100)
-    .map(([k]) => k);
+  // const candidates = Array.from(matchCountMap.entries())
+  //   .sort((a, b) => b[1] - a[1])
+  //   .slice(0, 100)
+  //   .map(([k]) => k);
+
+  // // 5) スコア計算
+  // const calculateScore = (patArr, inParts) => {
+  //   const total = patArr.filter(ch => /\p{Script=Han}/u.test(ch)).length;
+  //   if (!total) return 0;
+  //   const cnt = {};
+  //   inParts.forEach(x => (cnt[x] = (cnt[x] || 0) + 1));
+  //   let match = 0;
+  //   Object.entries(cnt).forEach(([p, n]) => {
+  //     const occ = patArr.reduce((s, c) => (c === p ? s + 1 : s), 0);
+  //     match += Math.min(n, occ);
+  //   });
+  //   const rate = (match / total) * 100;
+  //   const exact = patArr.length >= inParts.length && inParts.every((p, i) => patArr[i] === p);
+  //   return rate + (exact ? 50 : 0);
+  // };
+  // const scored = candidates
+  //   .map(k => {
+  //     const patterns = patternMap[k] || [];
+  //     const best = patterns.reduce((m, arr) => Math.max(m, calculateScore(arr, rawParts)), 0);
+  //     return { k, score: best };
+  //   })
+  //   .sort((a, b) => b.score - a.score)
+  //   .map(x => x.k);
+
+  // // 6) joyo/japanese フィルター
+  // let filtered = scored;
+  // if (mode === 'partsToKanji') {
+  //   if (region === 'joyo') {
+  //     filtered = filtered.filter(k => joyoSet.has(k));
+  //   } else if (region === 'japanese') {
+  //     filtered = filtered.filter(k => joyoSet.has(k) || oldNewMap[k]);
+  //   }
+  // }
+
+
+  // 4) joyo/japanese フィルター
+  let filtered = Array.from(matchCountMap.keys());
+  if (mode === 'partsToKanji') {
+    if (region === 'joyo') {
+      filtered = filtered.filter(k => joyoSet.has(k));
+    } else if (region === 'japanese') {
+      filtered = filtered.filter(k => joyoSet.has(k) || oldNewMap[k]);
+    }
+  }
 
   // 5) スコア計算
   const calculateScore = (patArr, inParts) => {
@@ -124,25 +171,19 @@ self.onmessage = ({ data }) => {
     const exact = patArr.length >= inParts.length && inParts.every((p, i) => patArr[i] === p);
     return rate + (exact ? 50 : 0);
   };
-  const scored = candidates
-    .map(k => {
-      const patterns = patternMap[k] || [];
-      const best = patterns.reduce((m, arr) => Math.max(m, calculateScore(arr, rawParts)), 0);
-      return { k, score: best };
-    })
-    .sort((a, b) => b.score - a.score)
-    .map(x => x.k);
+  const scoredObjs = filtered.map(k => {
+    const patterns = patternMap[k] || [];
+    // 各パターンで最高スコアを求める
+    const best = patterns.reduce((m, arr) => Math.max(m, calculateScore(arr, rawParts)), 0);
+    return { k, score: best };
+  });
 
-  // 6) joyo/japanese フィルター
-  let filtered = scored;
-  if (mode === 'partsToKanji') {
-    if (region === 'joyo') {
-      filtered = filtered.filter(k => joyoSet.has(k));
-    } else if (region === 'japanese') {
-      filtered = filtered.filter(k => joyoSet.has(k) || oldNewMap[k]);
-    }
-  }
+  // 6) 上位100件を抽出
+  const candidates = scoredObjs
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_CANDIDATES)
+    .map(o => o.k);
 
   // 7) 最終返却
-  postMessage({ results: filtered });
+  postMessage({ results: candidates });
 };
