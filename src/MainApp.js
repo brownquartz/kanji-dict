@@ -25,6 +25,8 @@ export default function MainApp() {
   const [page, setPage] = useState(1);
   const MAX_DISPLAY = 100;
   const [detail, setDetail] = useState(null);
+  // LOADING フラグ
+  const [loading, setLoading] = useState(true);
 
   // ————— Workerインスタンスを一度だけ生成 —————
   const worker = useMemo(createSearchWorker, []);
@@ -72,6 +74,7 @@ export default function MainApp() {
   useEffect(() => {
     // patternMapが空の間はまだ初期化しない
     if (!Object.keys(patternMap).length) return;
+    setLoading(false);
     worker.postMessage({
       init: true,
       directMap,
@@ -130,6 +133,11 @@ export default function MainApp() {
   // ————— UIレンダー —————
   return (
     <div className="app-container">
+      { loading && (
+        <div className="loading-overlay">
+          <div className="loading-bar" />
+        </div>
+      )}
       <h1 className="header">
         漢字分解・組み立て検索
         <span className={`info-icon ${mode}`}>ⓘ

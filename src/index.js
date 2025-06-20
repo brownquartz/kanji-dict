@@ -10,7 +10,7 @@ const root = createRoot(container);
 
 // Render your App
 root.render(
-  <React.StrictMode>
+  // <React.StrictMode>
     <App />
-  </React.StrictMode>
+  // </React.StrictMode>
 );

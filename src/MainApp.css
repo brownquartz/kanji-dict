@@ -284,3 +284,28 @@
   /* 文字列をそのまま表示するため */
   white-space: pre-line;
 }
+
+/* 外側：全画面オーバーレイ */
+.loading-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(255,255,255,0.8);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: 9999;
+}
+
+/* ローディングバー本体 */
+.loading-bar {
+  width: 0;
+  height: 4px;
+  background: #4e79a7; /* ブルー系 */
+  animation: loadProgress 1s ease-out forwards;
+}
+
+/* プログレスアニメーション */
+@keyframes loadProgress {
+  from { width: 0; }
+  to   { width: 100%; }
+}
