@@ -1,6 +1,6 @@
 {
   "name": "kanji-dict",
-  "homepage": "https://brownquartz.github.io/kanji-dict",
+  "homepage": "/",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
