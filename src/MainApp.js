@@ -3,7 +3,7 @@ import React, { useState, useCallback } from 'react';
 import DetailsPage from './DetailsPage';
 import './MainApp.css';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000';
+const API_URL = process.env.REACT_APP_API_URL ?? 'http://localhost:4000';
 
 export default function MainApp() {
   const [inputValue, setInputValue] = useState('');

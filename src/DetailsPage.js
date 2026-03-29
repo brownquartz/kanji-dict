@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
 import './App.css';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000';
+const API_URL = process.env.REACT_APP_API_URL ?? 'http://localhost:4000';
 
 export default function DetailsPage({ kanji }) {
   const [data, setData] = useState(null);
