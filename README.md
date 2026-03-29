@@ -1,6 +1,6 @@
 # Go to page
 
-https://brownquartz.github.io/kanji-dict/
+https://kanji-dict.brwqz.net/
 
 ### 20250613
    1. 中国漢字もあるため、日本語のみ絞り込む必要？
