@@ -1,6 +1,7 @@
-require('dotenv').config({ path: '../.env' });
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const { Pool } = require('pg');
 
 const app = express();
@@ -173,17 +174,27 @@ app.get('/api/kanji/:char', async (req, res) => {
   const char = req.params.char;
   const client = await pool.connect();
   try {
-    const { rows } = await client.query(
-      `SELECT * FROM kanji WHERE character = $1`,
-      [char]
-    );
-    if (!rows.length) return res.status(404).json({ error: 'not found' });
-    res.json(rows[0]);
+    const [kanjiRes, partsRes] = await Promise.all([
+      client.query(`SELECT * FROM kanji WHERE character = $1`, [char]),
+      client.query(`SELECT part_char FROM kanji_parts WHERE kanji_char = $1`, [char]),
+    ]);
+    if (!kanjiRes.rows.length) return res.status(404).json({ error: 'not found' });
+    res.json({
+      ...kanjiRes.rows[0],
+      parts: partsRes.rows.map(r => r.part_char),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
   }
+});
+
+// ─── React 静的ファイル配信 ───────────────────────────────────────────────────
+const buildPath = path.join(__dirname, '../build');
+app.use(express.static(buildPath));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(buildPath, 'index.html'));
 });
 
 const PORT = process.env.PORT || 4000;

@@ -3,29 +3,24 @@ import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
 import './App.css';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000';
+
 export default function DetailsPage({ kanji }) {
-  const [entry, setEntry] = useState(null);
-  const [parts, setParts] = useState([]);
+  const [data, setData] = useState(null);
 
   useEffect(() => {
-    const base = process.env.PUBLIC_URL || '';
-    (async() => {
-      const [joyoData, direct] = await Promise.all([
-        fetch(`${base}/joyo2010.json`).then(r=>r.json()),
-        fetch(`${base}/direct_decomp.json`).then(r=>r.json())
-      ]);
-      const cp = kanji.codePointAt(0).toString();
-      setEntry(joyoData[cp] || {});
-      setParts(direct[kanji] || []);
-    })();
+    fetch(`${API_URL}/api/kanji/${encodeURIComponent(kanji)}`)
+      .then(r => r.json())
+      .then(setData)
+      .catch(console.error);
   }, [kanji]);
 
-  if (!entry) return <div>Loading...</div>;
+  if (!data) return <div>Loading...</div>;
 
-  const hex = kanji.codePointAt(0).toString(16).toUpperCase().padStart(4,'0');
-  const on = entry.yomi?.on_yomi?.join('、');
-  const kun = entry.yomi?.kun_yomi?.join('、');
-  const description = `漢字「${kanji}」の情報。Unicode U+${hex}、音読み: ${on||'-'}、訓読み: ${kun||'-'}。`;
+  const hex = kanji.codePointAt(0).toString(16).toUpperCase().padStart(4, '0');
+  const on = data.on_yomi?.join('、');
+  const kun = data.kun_yomi?.join('、');
+  const description = `漢字「${kanji}」の情報。Unicode U+${hex}、音読み: ${on || '-'}、訓読み: ${kun || '-'}。`;
 
   return (
     <div className="details-container">
@@ -40,7 +35,7 @@ export default function DetailsPage({ kanji }) {
       <p>Unicode: U+{hex}</p>
       {on && <p>音読み: {on}</p>}
       {kun && <p>訓読み: {kun}</p>}
-      <p>部品: {parts.join('、') || '-'}</p>
+      <p>部品: {data.parts?.join('、') || '-'}</p>
     </div>
   );
 }

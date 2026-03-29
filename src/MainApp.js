@@ -1,22 +1,11 @@
 // src/MainApp.js
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import DetailsPage from './DetailsPage';
 import './MainApp.css';
 
-// ワーカー読み込み（CRA 5+ の組み込み機能を使う場合）
-const createSearchWorker = () =>
-  new Worker(new URL('./searchWorker.js', import.meta.url), { type: 'module' });
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000';
 
 export default function MainApp() {
-  // ————— データマップ —————
-  const [directMap, setDirectMap] = useState({});
-  const [patternMap, setPatternMap] = useState({});
-  const [variantMap, setVariantMap] = useState({});
-  const [joyoSet, setJoyoSet] = useState(new Set());
-  const [oldNewMap, setOldNewMap] = useState({});
-  const [patternIndex, setPatternIndex] = useState(null);
-
-  // ————— UIステート —————
   const [inputValue, setInputValue] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [mode, setMode] = useState('partsToKanji');
@@ -25,100 +14,51 @@ export default function MainApp() {
   const [page, setPage] = useState(1);
   const MAX_DISPLAY = 100;
   const [detail, setDetail] = useState(null);
-  // LOADING フラグ
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
-  // ————— Workerインスタンスを一度だけ生成 —————
-  const worker = useMemo(createSearchWorker, []);
-
-  // ————— 1) 初期データ読み込み ── mount時に一度だけ —————
-  useEffect(() => {
-    const base = process.env.PUBLIC_URL || '';
-    (async () => {
-
-      const [d,vdata, jdata, onew, patternIndex] = await Promise.all([
-        fetch(`${base}/flat_decomp.json`).then(r => r.json()),
-        fetch(`${base}/variants.json`).then(r => r.json()),
-        fetch(`${base}/joyo2010.json`).then(r => r.json()),
-        fetch(`${base}/old_to_new_kanjis.json`).then(r => r.json()),
-        fetch(`${base}/pattern_index.json`).then(r => r.json()),
-      ]);
-      // directMap
-      setDirectMap(d);
-
-      // variantMap (byBase のみ)
-      setVariantMap(vdata.byBase || {});
-
-      // joyoSet
-      setJoyoSet(new Set(Object.values(jdata).map(e => e.joyo_kanji)));
-
-      // oldNewMap
-      setOldNewMap(onew);
-
-      setPatternIndex(patternIndex);
-    
-      // patternMap をマージ（patternIndex からチャンク番号を取得して動的ロード）
-      const merged = {};
-      const seen = new Set(Object.values(patternIndex));
-      for (const idx of seen) {
-        const chunk = await fetch(
-          `${base}/pattern_chunks/pattern_decomp_${idx}.json`
-        ).then(r => r.json());
-        Object.assign(merged, chunk);
-      }
-      setPatternMap(merged);
-    })();
-  }, []);
-
-  // ————— 2) Workerに初期データを渡す —————
-  useEffect(() => {
-    // patternMapが空の間はまだ初期化しない
-    if (!Object.keys(patternMap).length) return;
-    setLoading(false);
-    worker.postMessage({
-      init: true,
-      directMap,
-      variantMap,
-      patternMap,
-      joyoList: Array.from(joyoSet),
-      oldNewMap,
-    });
-  }, [worker, directMap, variantMap, patternMap, joyoSet, oldNewMap]);
-
-  // ————— 3) 検索語が変わったらWorkerに投げる —————
-  useEffect(() => {
-    if (!searchTerm) { setResults([]); return; }
-    // 漢字だけ抽出
-    const rawParts = Array.from(searchTerm).filter(ch => /\p{Script=Han}/u.test(ch));
+  const runSearch = useCallback(async (term, currentMode, currentRegion) => {
+    if (!term) { setResults([]); return; }
+    const rawParts = Array.from(term).filter(ch => /\p{Script=Han}/u.test(ch));
     if (!rawParts.length) { setResults([]); return; }
 
-    worker.postMessage({ parts: rawParts, mode, region });
-  }, [worker, searchTerm, mode, region]);
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parts: rawParts, mode: currentMode, region: currentRegion }),
+      });
+      const data = await res.json();
+      setResults(data.results || []);
+      setPage(1);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  // ————— 4) Workerから結果を受け取る —————
-  useEffect(() => {
-    const handler = e => {
-      const { data } = e;
-      if (data.results) {
-        setResults(data.results);
-        setPage(1);
-      }
-    };
-    worker.addEventListener('message', handler);
-    return () => worker.removeEventListener('message', handler);
-  }, [worker]);
+  const handleSearch = () => {
+    const term = inputValue.trim();
+    setSearchTerm(term);
+    runSearch(term, mode, region);
+  };
 
-  // ————— 検索トリガー & キーイベント —————
-  const handleSearch = () => setSearchTerm(inputValue.trim());
   const handleKeyDown = e => { if (e.key === 'Enter') handleSearch(); };
 
-  
+  const handleModeChange = (newMode) => {
+    setMode(newMode);
+    if (searchTerm) runSearch(searchTerm, newMode, region);
+  };
 
-  // ————— ページネーション用に先頭N件だけ —————
+  const handleRegionChange = (newRegion) => {
+    setRegion(newRegion);
+    if (searchTerm) runSearch(searchTerm, mode, newRegion);
+  };
+
   const visible = results.slice(0, page * MAX_DISPLAY);
   const moreCount = results.length - visible.length;
 
-  // ————— 詳細モード —————
   if (detail) {
     return (
       <div className="app-container">
@@ -130,10 +70,9 @@ export default function MainApp() {
     );
   }
 
-  // ————— UIレンダー —————
   return (
     <div className="app-container">
-      { loading && (
+      {loading && (
         <div className="loading-overlay">
           <div className="loading-bar" />
         </div>
@@ -141,55 +80,52 @@ export default function MainApp() {
       <h1 className="header">
         漢字分解・組み立て検索
         <span className={`info-icon ${mode}`}>ⓘ
-          { mode === 'partsToKanji' && (
-          <div className="tooltip">
-            {`入力部品を組み立てて、
-            一番近い漢字を出力します。
-            ex) "口口口" ⇒ "品臨器操燥繰藻"
-                "水也" ⇒ "池"
-                "角刀牛" ⇒ "解"
-            `}
-          </div>
+          {mode === 'partsToKanji' && (
+            <div className="tooltip">
+              {`入力部品を組み立てて、
+              一番近い漢字を出力します。
+              ex) "口口口" ⇒ "品臨器操燥繰藻"
+                  "水也" ⇒ "池"
+                  "角刀牛" ⇒ "解"
+              `}
+            </div>
           )}
-          { mode === 'kanjiToParts' && (
-          <div className="tooltip">
-            {`漢字を複数層で分けて、
-            全要素を重複なしで出力します。
-            ex) "嘔" ⇒ "口區匸品"
-            "池" ⇒ "氵也"
-            "解" ⇒ "刀牛角丿𠃌"
-            `}
-          </div>
+          {mode === 'kanjiToParts' && (
+            <div className="tooltip">
+              {`漢字を複数層で分けて、
+              全要素を重複なしで出力します。
+              ex) "嘔" ⇒ "口區匸品"
+              "池" ⇒ "氵也"
+              "解" ⇒ "刀牛角丿𠃌"
+              `}
+            </div>
           )}
         </span>
       </h1>
-      {/* <div className="logo-container">
-        <img src={`${process.env.PUBLIC_URL}/images/logo.png`} alt="Logo" className="logo" />
-      </div> */}
       <div className="controls">
         <div className="modes">
           <button
             className={mode === 'partsToKanji' ? 'active' : ''}
-            onClick={() => setMode('partsToKanji')}
+            onClick={() => handleModeChange('partsToKanji')}
           >部品→漢字</button>
           <button
             className={mode === 'kanjiToParts' ? 'active' : ''}
-            onClick={() => setMode('kanjiToParts')}
+            onClick={() => handleModeChange('kanjiToParts')}
           >漢字→部品</button>
         </div>
         {mode === 'partsToKanji' && (
           <div className="region-filter">
             <button
               className={region === 'joyo' ? 'active' : ''}
-              onClick={() => setRegion('joyo')}
+              onClick={() => handleRegionChange('joyo')}
             >常用漢字</button>
             <button
               className={region === 'japanese' ? 'active' : ''}
-              onClick={() => setRegion('japanese')}
+              onClick={() => handleRegionChange('japanese')}
             >+表外漢字</button>
             <button
               className={region === 'chinese' ? 'active' : ''}
-              onClick={() => setRegion('chinese')}
+              onClick={() => handleRegionChange('chinese')}
             >+中国漢字</button>
           </div>
         )}
