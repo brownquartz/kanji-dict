@@ -5,10 +5,11 @@ import './App.css';
 
 const API_URL = process.env.REACT_APP_API_URL ?? 'http://localhost:4000';
 
-export default function DetailsPage({ kanji }) {
+export default function DetailsPage({ kanji, onPartClick }) {
   const [data, setData] = useState(null);
 
   useEffect(() => {
+    setData(null);
     fetch(`${API_URL}/api/kanji/${encodeURIComponent(kanji)}`)
       .then(r => r.json())
       .then(setData)
@@ -18,8 +19,9 @@ export default function DetailsPage({ kanji }) {
   if (!data) return <div>Loading...</div>;
 
   const hex = kanji.codePointAt(0).toString(16).toUpperCase().padStart(4, '0');
-  const on = data.on_yomi?.join('、');
+  const on  = data.on_yomi?.join('、');
   const kun = data.kun_yomi?.join('、');
+  const meanings = data.meanings?.ja?.filter(m => m);
   const description = `漢字「${kanji}」の情報。Unicode U+${hex}、音読み: ${on || '-'}、訓読み: ${kun || '-'}。`;
 
   return (
@@ -33,9 +35,30 @@ export default function DetailsPage({ kanji }) {
 
       <h2>{kanji}</h2>
       <p>Unicode: U+{hex}</p>
-      {on && <p>音読み: {on}</p>}
+      {on  && <p>音読み: {on}</p>}
       {kun && <p>訓読み: {kun}</p>}
-      <p>部品: {data.parts?.join('、') || '-'}</p>
+
+      {meanings?.length > 0 && (
+        <div className="meanings">
+          <p>意味:</p>
+          <ol>
+            {meanings.map((m, i) => <li key={i}>{m}</li>)}
+          </ol>
+        </div>
+      )}
+
+      {data.parts?.length > 0 && (
+        <div className="parts">
+          <p>部品:</p>
+          <ul className="parts-list">
+            {data.parts.map((p, i) => (
+              <li key={i} onClick={() => onPartClick?.(p)} className="part-item">
+                {p}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

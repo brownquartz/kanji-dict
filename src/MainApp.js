@@ -65,7 +65,7 @@ export default function MainApp() {
         <button className="search-button" onClick={() => setDetail(null)}>
           ← 検索一覧へ戻る
         </button>
-        <DetailsPage kanji={detail} />
+        <DetailsPage kanji={detail} onPartClick={setDetail} />
       </div>
     );
   }

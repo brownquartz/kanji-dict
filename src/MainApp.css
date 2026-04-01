@@ -309,3 +309,38 @@
   from { width: 0; }
   to   { width: 100%; }
 }
+
+/* ─── 詳細ページ ───────────────────────────────────────────────── */
+.details-container {
+  padding: 1rem;
+}
+.details-container h2 {
+  font-size: 4rem;
+  text-align: center;
+  margin-bottom: 1rem;
+}
+.meanings ol {
+  padding-left: 1.5rem;
+  line-height: 1.8;
+}
+.parts-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0;
+  margin-top: 0.5rem;
+}
+.part-item {
+  font-size: 2rem;
+  padding: 0.4rem 0.8rem;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.part-item:hover {
+  background: #eef5ff;
+  border-color: #007bff;
+}
