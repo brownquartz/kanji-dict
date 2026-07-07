@@ -6,7 +6,21 @@ const { Pool } = require('pg');
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+
+const allowedOrigins = [
+  'https://kanji-dict.brwqz.net',
+  'http://localhost:3000',
+];
+app.use(cors({
+  origin: (origin, callback) => {
+    // origin が undefined = サーバー間リクエスト（curl等）は許可
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('CORS policy violation'));
+    }
+  },
+}));
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
