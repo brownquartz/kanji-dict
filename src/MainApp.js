@@ -1,22 +1,30 @@
 // src/MainApp.js
 import React, { useState, useCallback } from 'react';
-import DetailsPage from './DetailsPage';
+import { useNavigate } from 'react-router-dom';
+import HandwritingCanvas from './HandwritingCanvas';
+import SearchRanking from './SearchRanking';
 import './MainApp.css';
 
 const API_URL = process.env.REACT_APP_API_URL ?? 'http://localhost:4000';
 
 export default function MainApp() {
+  const navigate = useNavigate();
+
   const [inputValue, setInputValue] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [mode, setMode] = useState('partsToKanji');
   const [region, setRegion] = useState('joyo');
   const [results, setResults] = useState([]);
   const [page, setPage] = useState(1);
-  const MAX_DISPLAY = 100;
-  const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
+  const MAX_DISPLAY = 100;
 
-  const runSearch = useCallback(async (term, currentMode, currentRegion) => {
+  // 引き算モード
+  const [subMinuend, setSubMinuend] = useState('');
+  const [subSubtrahend, setSubSubtrahend] = useState('');
+  const [subRemainingParts, setSubRemainingParts] = useState([]);
+
+  const doSearch = useCallback(async (term, currentMode, currentRegion) => {
     if (!term) { setResults([]); return; }
     const rawParts = Array.from(term).filter(ch => /\p{Script=Han}/u.test(ch));
     if (!rawParts.length) { setResults([]); return; }
@@ -38,37 +46,60 @@ export default function MainApp() {
     }
   }, []);
 
+  const doSubtract = useCallback(async (minuend, subtrahend, currentRegion) => {
+    if (!minuend || !subtrahend) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/search/subtract`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ minuend, subtrahend, region: currentRegion }),
+      });
+      const data = await res.json();
+      setResults(data.results || []);
+      setSubRemainingParts(data.remainingParts || []);
+      setPage(1);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const handleSearch = () => {
     const term = inputValue.trim();
     setSearchTerm(term);
-    runSearch(term, mode, region);
+    doSearch(term, mode, region);
   };
 
   const handleKeyDown = e => { if (e.key === 'Enter') handleSearch(); };
 
   const handleModeChange = (newMode) => {
     setMode(newMode);
-    if (searchTerm) runSearch(searchTerm, newMode, region);
+    setResults([]);
+    setSearchTerm('');
+    setSubRemainingParts([]);
   };
 
   const handleRegionChange = (newRegion) => {
     setRegion(newRegion);
-    if (searchTerm) runSearch(searchTerm, mode, newRegion);
+    if (searchTerm) doSearch(searchTerm, mode, newRegion);
+  };
+
+  const handleHandwritingRecognize = (candidates) => {
+    setResults(candidates.filter(c => /\p{Script=Han}/u.test(c)));
+    setPage(1);
   };
 
   const visible = results.slice(0, page * MAX_DISPLAY);
   const moreCount = results.length - visible.length;
 
-  if (detail) {
-    return (
-      <div className="app-container">
-        <button className="search-button" onClick={() => setDetail(null)}>
-          ← 検索一覧へ戻る
-        </button>
-        <DetailsPage kanji={detail} onPartClick={setDetail} />
-      </div>
-    );
-  }
+  const tooltipText = {
+    partsToKanji: `入力部品を組み立てて、\n一番近い漢字を出力します。\nex) "口口口" ⇒ "品臨器操燥繰藻"\n    "水也" ⇒ "池"\n    "角刀牛" ⇒ "解"`,
+    kanjiToParts: `漢字を複数層で分けて、\n全要素を重複なしで出力します。\nex) "嘔" ⇒ "口區匸品"\n"池" ⇒ "氵也"\n"解" ⇒ "刀牛角丿𠃌"`,
+    subtract: `漢字から部品を引いて、\n残りの部品を持つ漢字を探します。\nex) "汲 − 氵" ⇒ "及"\n    "解 − 角" ⇒ "判"`,
+    handwriting: `キャンバスに漢字を書いて認識します。\n認識結果をクリックすると詳細を表示。`,
+  };
 
   return (
     <div className="app-container">
@@ -77,83 +108,93 @@ export default function MainApp() {
           <div className="loading-bar" />
         </div>
       )}
+
       <h1 className="header">
         漢字分解・組み立て検索
         <span className={`info-icon ${mode}`}>ⓘ
-          {mode === 'partsToKanji' && (
-            <div className="tooltip">
-              {`入力部品を組み立てて、
-              一番近い漢字を出力します。
-              ex) "口口口" ⇒ "品臨器操燥繰藻"
-                  "水也" ⇒ "池"
-                  "角刀牛" ⇒ "解"
-              `}
-            </div>
-          )}
-          {mode === 'kanjiToParts' && (
-            <div className="tooltip">
-              {`漢字を複数層で分けて、
-              全要素を重複なしで出力します。
-              ex) "嘔" ⇒ "口區匸品"
-              "池" ⇒ "氵也"
-              "解" ⇒ "刀牛角丿𠃌"
-              `}
-            </div>
-          )}
+          <div className="tooltip">{tooltipText[mode]}</div>
         </span>
       </h1>
+
       <div className="controls">
         <div className="modes">
-          <button
-            className={mode === 'partsToKanji' ? 'active' : ''}
-            onClick={() => handleModeChange('partsToKanji')}
-          >部品→漢字</button>
-          <button
-            className={mode === 'kanjiToParts' ? 'active' : ''}
-            onClick={() => handleModeChange('kanjiToParts')}
-          >漢字→部品</button>
+          <button className={mode === 'partsToKanji' ? 'active' : ''} onClick={() => handleModeChange('partsToKanji')}>部品→漢字</button>
+          <button className={mode === 'kanjiToParts' ? 'active' : ''} onClick={() => handleModeChange('kanjiToParts')}>漢字→部品</button>
+          <button className={mode === 'subtract' ? 'active' : ''} onClick={() => handleModeChange('subtract')}>引き算</button>
+          <button className={mode === 'handwriting' ? 'active' : ''} onClick={() => handleModeChange('handwriting')}>手書き</button>
         </div>
-        {mode === 'partsToKanji' && (
-          <div className="region-filter">
-            <button
-              className={region === 'joyo' ? 'active' : ''}
-              onClick={() => handleRegionChange('joyo')}
-            >常用漢字</button>
-            <button
-              className={region === 'japanese' ? 'active' : ''}
-              onClick={() => handleRegionChange('japanese')}
-            >+表外漢字</button>
-            <button
-              className={region === 'chinese' ? 'active' : ''}
-              onClick={() => handleRegionChange('chinese')}
-            >+中国漢字</button>
+
+        {(mode === 'partsToKanji' || mode === 'kanjiToParts') && (
+          <>
+            {mode === 'partsToKanji' && (
+              <div className="region-filter">
+                <button className={region === 'joyo' ? 'active' : ''} onClick={() => handleRegionChange('joyo')}>常用漢字</button>
+                <button className={region === 'japanese' ? 'active' : ''} onClick={() => handleRegionChange('japanese')}>+表外漢字</button>
+                <button className={region === 'chinese' ? 'active' : ''} onClick={() => handleRegionChange('chinese')}>+中国漢字</button>
+              </div>
+            )}
+            <div className="search-section">
+              <div className="search-box">
+                <input
+                  className="search-input"
+                  placeholder={mode === 'partsToKanji' ? '部品入力' : '漢字入力'}
+                  value={inputValue}
+                  onChange={e => setInputValue(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                />
+                <button className="search-button" onClick={handleSearch}>検索</button>
+              </div>
+              {searchTerm && <div className="search-info">検索ワード：{searchTerm}</div>}
+            </div>
+          </>
+        )}
+
+        {mode === 'subtract' && (
+          <div className="subtract-section">
+            <div className="region-filter">
+              <button className={region === 'joyo' ? 'active' : ''} onClick={() => setRegion('joyo')}>常用漢字</button>
+              <button className={region === 'japanese' ? 'active' : ''} onClick={() => setRegion('japanese')}>+表外漢字</button>
+              <button className={region === 'chinese' ? 'active' : ''} onClick={() => setRegion('chinese')}>+中国漢字</button>
+            </div>
+            <div className="subtract-box">
+              <input
+                className="search-input subtract-input"
+                placeholder="漢字"
+                value={subMinuend}
+                onChange={e => setSubMinuend(e.target.value)}
+                maxLength={1}
+              />
+              <span className="subtract-op">−</span>
+              <input
+                className="search-input subtract-input"
+                placeholder="引く部品"
+                value={subSubtrahend}
+                onChange={e => setSubSubtrahend(e.target.value)}
+              />
+              <span className="subtract-op">=</span>
+              {subRemainingParts.length > 0 && (
+                <span className="subtract-remaining">{subRemainingParts.join(' ')}</span>
+              )}
+              <button className="search-button" onClick={() => doSubtract(subMinuend.trim(), subSubtrahend.trim(), region)}>計算</button>
+            </div>
           </div>
         )}
-        <div className="search-section">
-          <div className="search-box">
-            <input
-              className="search-input"
-              placeholder={mode === 'partsToKanji' ? '部品入力' : '漢字入力'}
-              value={inputValue}
-              onChange={e => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-            />
-            <button className="search-button" onClick={handleSearch}>検索</button>
-          </div>
-          {searchTerm && (
-            <div className="search-info">検索ワード：{searchTerm}</div>
-          )}
-        </div>
+
+        {mode === 'handwriting' && (
+          <HandwritingCanvas onRecognize={handleHandwritingRecognize} />
+        )}
       </div>
+
+      {/* 結果一覧（手書きも含む） */}
       <div className="result-section">
         <ul className="result-list">
           {visible.length > 0 ? (
             visible.map((k, i) => (
-              <li key={i} onClick={() => setDetail(k)}>{k}</li>
+              <li key={i} onClick={() => navigate(`/kanji/${encodeURIComponent(k)}`)}>{k}</li>
             ))
           ) : (
             <li className="no-data">
-              {searchTerm ? 'X' : '.'}
+              {(searchTerm || (mode === 'subtract' && subMinuend) || mode === 'handwriting') ? 'X' : '.'}
             </li>
           )}
         </ul>
@@ -163,6 +204,13 @@ export default function MainApp() {
           </button>
         )}
       </div>
+
+      <SearchRanking onKanjiClick={(q) => {
+        handleModeChange('partsToKanji');
+        setInputValue(q);
+        setSearchTerm(q);
+        doSearch(q, 'partsToKanji', region);
+      }} />
     </div>
   );
 }

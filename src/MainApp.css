@@ -310,6 +310,159 @@
   to   { width: 100%; }
 }
 
+/* ─── 引き算モード ───────────────────────────────────────────── */
+.subtract-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.subtract-box {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.subtract-input {
+  width: 80px;
+  text-align: center;
+}
+
+.subtract-op {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #555;
+}
+
+.subtract-remaining {
+  font-size: 1.2rem;
+  color: #007bff;
+  font-weight: bold;
+  min-width: 2rem;
+}
+
+/* ─── 手書きキャンバス ────────────────────────────────────────── */
+.handwriting-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.handwriting-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.handwriting-buttons button {
+  padding: 0.4rem 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #f8f9fa;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.handwriting-buttons button:hover:not(:disabled) {
+  background: #e9ecef;
+}
+
+.handwriting-buttons button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ─── 検索ランキング ──────────────────────────────────────────── */
+.ranking-section {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #ddd;
+}
+
+.ranking-section h3 {
+  text-align: center;
+  font-size: 1rem;
+  color: #555;
+  margin-bottom: 0.75rem;
+}
+
+.ranking-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.ranking-tabs button {
+  padding: 0.3rem 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #f8f9fa;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.2s;
+}
+
+.ranking-tabs button:hover {
+  background: #e9ecef;
+}
+
+.ranking-tabs button.active {
+  background: #17a2b8;
+  color: #fff;
+  border-color: #17a2b8;
+}
+
+.ranking-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.ranking-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.ranking-item:hover {
+  background: #f0f8ff;
+}
+
+.ranking-num {
+  font-weight: bold;
+  color: #888;
+  width: 1.5rem;
+  text-align: right;
+}
+
+.ranking-char {
+  font-size: 1.4rem;
+  flex: 1;
+  color: #0050b3;
+}
+
+.ranking-count {
+  font-size: 0.8rem;
+  color: #aaa;
+}
+
+.ranking-empty {
+  text-align: center;
+  color: #aaa;
+  padding: 1rem;
+  font-style: italic;
+}
+
 /* ─── 詳細ページ ───────────────────────────────────────────────── */
 .details-container {
   padding: 1rem;
