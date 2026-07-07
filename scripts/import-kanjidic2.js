@@ -18,228 +18,150 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-// ─── SAX parsing state ───────────────────────────────────────────────────────
+// ─── Phase 1: Parse XML into memory ─────────────────────────────────────────
 
-// Element path stack
-const stack = [];
+function parseKanjidic2() {
+  return new Promise((resolve, reject) => {
+    console.log(`Downloading ${KANJIDIC2_URL} …`);
 
-// Current character being built
-let current = null;
+    const records = [];
+    let current = null;
+    let inMisc = false;
+    let inMeaning = false;
+    let meaningLang = null;
+    const stack = [];
 
-// Flags for where we are inside a character
-let inMisc = false;
-let inMeaning = false;
-let meaningLang = null; // null = English (no m_lang attr)
+    const saxStream = sax.createStream(false, { lowercase: true, trim: true, normalize: true });
 
-// Batch accumulator
-const batch = [];
-let totalProcessed = 0;
+    saxStream.on('opentag', (node) => {
+      stack.push(node.name);
+      switch (node.name) {
+        case 'character':
+          current = { literal: null, meanings: [], stroke_count: null, grade: null, jlpt: null, freq: null };
+          inMisc = false;
+          break;
+        case 'misc':
+          if (current) inMisc = true;
+          break;
+        case 'meaning':
+          if (current) {
+            inMeaning = true;
+            meaningLang = node.attributes['m_lang'] || null;
+          }
+          break;
+      }
+    });
 
-// ─── DB update helper ────────────────────────────────────────────────────────
+    saxStream.on('text', (text) => {
+      if (!current) return;
+      const tag = stack[stack.length - 1];
+      switch (tag) {
+        case 'literal':
+          current.literal = text;
+          break;
+        case 'stroke_count':
+          if (inMisc && current.stroke_count === null) {
+            const v = parseInt(text, 10);
+            if (!isNaN(v)) current.stroke_count = v;
+          }
+          break;
+        case 'grade':
+          if (inMisc && current.grade === null) {
+            const v = parseInt(text, 10);
+            if (!isNaN(v)) current.grade = v;
+          }
+          break;
+        case 'jlpt':
+          if (inMisc && current.jlpt === null) {
+            const v = parseInt(text, 10);
+            if (!isNaN(v)) current.jlpt = v;
+          }
+          break;
+        case 'freq':
+          if (inMisc && current.freq === null) {
+            const v = parseInt(text, 10);
+            if (!isNaN(v)) current.freq = v;
+          }
+          break;
+        case 'meaning':
+          if (inMeaning && meaningLang === null) current.meanings.push(text);
+          break;
+      }
+    });
 
-async function flushBatch(client, records) {
-  if (records.length === 0) return;
+    saxStream.on('closetag', (name) => {
+      stack.pop();
+      switch (name) {
+        case 'misc':    inMisc = false; break;
+        case 'meaning': inMeaning = false; meaningLang = null; break;
+        case 'character':
+          if (current?.literal) records.push({ ...current });
+          current = null;
+          inMisc = false;
+          break;
+      }
+    });
 
-  for (const rec of records) {
-    const enMeanings = rec.meanings; // array of strings
+    saxStream.on('error', () => {
+      if (saxStream._parser) saxStream._parser.error = null;
+      saxStream.resume?.();
+    });
 
-    await client.query(
-      `UPDATE kanji
-       SET
-         meanings    = COALESCE(meanings, '{}'::jsonb) || $1::jsonb,
-         stroke_count = COALESCE(stroke_count, $2),
-         grade        = COALESCE(grade, $3),
-         jlpt_level   = COALESCE(jlpt_level, $4),
-         frequency    = COALESCE(frequency, $5)
-       WHERE character = $6`,
-      [
-        JSON.stringify({ en: enMeanings }),
-        rec.stroke_count !== undefined ? rec.stroke_count : null,
-        rec.grade       !== undefined ? rec.grade       : null,
-        rec.jlpt        !== undefined ? rec.jlpt        : null,
-        rec.freq        !== undefined ? rec.freq        : null,
-        rec.literal,
-      ]
-    );
+    saxStream.on('end', () => resolve(records));
+
+    http.get(KANJIDIC2_URL, (res) => {
+      if (res.statusCode !== 200) return reject(new Error(`HTTP ${res.statusCode}`));
+      const gunzip = zlib.createGunzip();
+      gunzip.on('error', reject);
+      res.pipe(gunzip).pipe(saxStream);
+    }).on('error', reject);
+  });
+}
+
+// ─── Phase 2: Write to DB ────────────────────────────────────────────────────
+
+async function writeToDb(records) {
+  const client = await pool.connect();
+  let updated = 0;
+  try {
+    for (let i = 0; i < records.length; i += BATCH_SIZE) {
+      const chunk = records.slice(i, i + BATCH_SIZE);
+      for (const rec of chunk) {
+        const result = await client.query(
+          `UPDATE kanji
+           SET
+             meanings     = COALESCE(meanings, '{}'::jsonb) || $1::jsonb,
+             stroke_count = COALESCE(stroke_count, $2),
+             grade        = COALESCE(grade, $3),
+             jlpt_level   = COALESCE(jlpt_level, $4),
+             frequency    = COALESCE(frequency, $5)
+           WHERE character = $6`,
+          [
+            JSON.stringify({ en: rec.meanings }),
+            rec.stroke_count,
+            rec.grade,
+            rec.jlpt,
+            rec.freq,
+            rec.literal,
+          ]
+        );
+        if (result.rowCount > 0) updated++;
+      }
+      process.stdout.write(`\r  DB更新中: ${Math.min(i + BATCH_SIZE, records.length)} / ${records.length} (更新: ${updated})`);
+    }
+    console.log(`\n完了! 更新: ${updated} 件`);
+  } finally {
+    client.release();
   }
 }
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const client = await pool.connect();
-
-  try {
-    console.log('Connecting to DB … OK');
-    console.log(`Downloading ${KANJIDIC2_URL} …`);
-
-    await new Promise((resolve, reject) => {
-      http.get(KANJIDIC2_URL, (res) => {
-        if (res.statusCode !== 200) {
-          return reject(new Error(`HTTP ${res.statusCode}`));
-        }
-
-        const gunzip = zlib.createGunzip();
-        const saxStream = sax.createStream(false /* not strict */, {
-          lowercase: true,
-          trim: true,
-          normalize: true,
-        });
-
-        // ── SAX event handlers ──────────────────────────────────────────────
-
-        saxStream.on('opentag', (node) => {
-          stack.push(node.name);
-
-          switch (node.name) {
-            case 'character':
-              current = {
-                literal: null,
-                meanings: [],
-                stroke_count: undefined,
-                grade: undefined,
-                jlpt: undefined,
-                freq: undefined,
-              };
-              inMisc = false;
-              inMeaning = false;
-              break;
-
-            case 'misc':
-              if (current) inMisc = true;
-              break;
-
-            case 'meaning':
-              if (current) {
-                inMeaning = true;
-                // m_lang attribute is absent for English entries
-                // In non-strict (lowercase) mode attr names are lowercased
-                meaningLang = node.attributes['m_lang'] || null;
-              }
-              break;
-          }
-        });
-
-        saxStream.on('text', (text) => {
-          if (!current) return;
-          const tag = stack[stack.length - 1];
-
-          switch (tag) {
-            case 'literal':
-              current.literal = text;
-              break;
-
-            case 'stroke_count':
-              if (inMisc && current.stroke_count === undefined) {
-                const v = parseInt(text, 10);
-                if (!isNaN(v)) current.stroke_count = v;
-              }
-              break;
-
-            case 'grade':
-              if (inMisc) {
-                const v = parseInt(text, 10);
-                if (!isNaN(v)) current.grade = v;
-              }
-              break;
-
-            case 'jlpt':
-              if (inMisc) {
-                const v = parseInt(text, 10);
-                if (!isNaN(v)) current.jlpt = v;
-              }
-              break;
-
-            case 'freq':
-              if (inMisc) {
-                const v = parseInt(text, 10);
-                if (!isNaN(v)) current.freq = v;
-              }
-              break;
-
-            case 'meaning':
-              if (inMeaning && meaningLang === null) {
-                // English meaning — no m_lang attribute
-                current.meanings.push(text);
-              }
-              break;
-          }
-        });
-
-        saxStream.on('closetag', async (name) => {
-          stack.pop();
-
-          switch (name) {
-            case 'misc':
-              inMisc = false;
-              break;
-
-            case 'meaning':
-              inMeaning = false;
-              meaningLang = null;
-              break;
-
-            case 'character':
-              if (current && current.literal) {
-                batch.push({ ...current });
-                totalProcessed++;
-
-                if (totalProcessed % 1000 === 0) {
-                  console.log(`  … processed ${totalProcessed} kanji`);
-                }
-
-                if (batch.length >= BATCH_SIZE) {
-                  const chunk = batch.splice(0, BATCH_SIZE);
-                  // pause stream while writing
-                  saxStream.pause && saxStream.pause();
-                  try {
-                    await flushBatch(client, chunk);
-                  } catch (err) {
-                    console.error('DB flush error:', err.message);
-                  }
-                  saxStream.resume && saxStream.resume();
-                }
-              }
-              current = null;
-              inMisc = false;
-              inMeaning = false;
-              break;
-          }
-        });
-
-        saxStream.on('error', (err) => {
-          // KanjiDic2 has a DOCTYPE / entity declarations that may cause
-          // parse errors in non-strict mode — safe to ignore and continue.
-          if (saxStream._parser) saxStream._parser.error = null;
-          saxStream.resume && saxStream.resume();
-        });
-
-        saxStream.on('end', async () => {
-          // Flush remaining records
-          if (batch.length > 0) {
-            try {
-              await flushBatch(client, batch.splice(0));
-            } catch (err) {
-              console.error('Final DB flush error:', err.message);
-            }
-          }
-          console.log(`\nDone! Total kanji processed: ${totalProcessed}`);
-          resolve();
-        });
-
-        res.pipe(gunzip).pipe(saxStream);
-
-        gunzip.on('error', reject);
-        saxStream.on('error', (err) => {
-          // Already handled above; avoid uncaught rejection
-        });
-      }).on('error', reject);
-    });
-
-  } finally {
-    client.release();
-    await pool.end();
-  }
+  const records = await parseKanjidic2();
+  console.log(`パース完了: ${records.length} 件`);
+  await writeToDb(records);
+  await pool.end();
 }
 
 main().catch((err) => {
