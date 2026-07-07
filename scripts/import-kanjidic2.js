@@ -51,7 +51,7 @@ async function flushBatch(client, records) {
          grade        = COALESCE(grade, $3),
          jlpt_level   = COALESCE(jlpt_level, $4),
          frequency    = COALESCE(frequency, $5)
-       WHERE literal = $6`,
+       WHERE character = $6`,
       [
         JSON.stringify({ en: enMeanings }),
         rec.stroke_count !== undefined ? rec.stroke_count : null,
