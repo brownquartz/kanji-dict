@@ -497,3 +497,45 @@
   background: #eef5ff;
   border-color: #007bff;
 }
+
+/* 熟語(部品から) */
+.char-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  font-size: 1.75rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+  color: #999;
+}
+.char-slot.filled {
+  background-color: #eef5ff;
+  border-color: #007bff;
+  color: #212529;
+}
+.word-result {
+  margin-top: 1rem;
+}
+.word-result h3 {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+.word-entry {
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: #fff;
+}
+.word-reading {
+  color: #007bff;
+  font-weight: 500;
+  margin: 0 0 0.25rem;
+}
+.word-meanings {
+  margin: 0;
+  color: #333;
+}

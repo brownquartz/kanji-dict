@@ -386,6 +386,26 @@ app.get('/api/kanji/:char', async (req, res) => {
   }
 });
 
+// ─── GET /api/word/:text ──────────────────────────────────────────────────────
+// 表記(kanji_form)の完全一致で words を検索する。
+// 「1文字ずつ部品検索で特定 → 2文字を連結」した候補文字列の確認に使う想定。
+app.get('/api/word/:text', async (req, res) => {
+  const text = req.params.text;
+  const client = await pool.connect();
+  try {
+    const { rows } = await client.query(
+      `SELECT reading, meanings FROM words WHERE kanji_form = $1`,
+      [text]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'not found' });
+    res.json({ text, entries: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 // ─── Feature 4: POST /api/handwriting ────────────────────────────────────────
 // body: { ink, width, height }
 app.post('/api/handwriting', async (req, res) => {
