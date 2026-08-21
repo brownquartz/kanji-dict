@@ -74,22 +74,31 @@ async function expandWithVariants(client, parts) {
 }
 
 // ─── Feature 8: calcScore ヘルパー ────────────────────────────────────────────
-// patternParts: DB から取得した漢字のパーツ配列（row.parts）
-// inputParts:   ユーザーが入力した検索パーツ配列
+// patternParts: DB から取得した漢字のパーツ配列（row.parts。重複あり得る）
+// inputParts:   ユーザーが入力した検索パーツ配列（重複あり得る。例: 品→"口口口"）
+//
+// recall（要求した部品をどれだけ満たせたか）を主軸に、precision（候補が要求部品
+// 以外の余計な部品でどれだけ埋まっていないか）と順序ボーナスを加える。
+// 以前は precision 相当の値だけを見ていたため、候補側の部品数が少ないだけで
+// スコアが不当に高くなり（要求部品を一部しか満たしていなくても100%扱いになる）、
+// 並び順がおかしく見える原因になっていた。
 function calcScore(patternParts, inputParts) {
   const kanjiParts = patternParts.filter(p => p.codePointAt(0) > 0x007F);
   const total = kanjiParts.length;
-  if (!total) return 0;
+  if (!total || !inputParts.length) return 0;
 
-  // match rate（既存ロジック）
-  const cnt = {};
-  inputParts.forEach(p => (cnt[p] = (cnt[p] || 0) + 1));
+  const inputCnt = {};
+  inputParts.forEach(p => (inputCnt[p] = (inputCnt[p] || 0) + 1));
+  const candCnt = {};
+  kanjiParts.forEach(p => (candCnt[p] = (candCnt[p] || 0) + 1));
+
   let match = 0;
-  Object.entries(cnt).forEach(([p, n]) => {
-    const occ = patternParts.filter(c => c === p).length;
-    match += Math.min(n, occ);
+  Object.entries(inputCnt).forEach(([p, n]) => {
+    match += Math.min(n, candCnt[p] || 0);
   });
-  const matchRate = (match / total) * 100;
+
+  const recall = match / inputParts.length; // 要求部品をどれだけ満たしたか（最重要）
+  const precision = match / total;          // 候補が要求部品でどれだけ占められているか
 
   // order bonus: inputParts が patternParts の部分列（subsequence）として現れるか確認
   let ptr = 0;
@@ -100,9 +109,75 @@ function calcScore(patternParts, inputParts) {
       ptr++;
     }
   }
-  const orderBonus = (orderMatched / inputParts.length) * 20;
+  const orderBonus = (orderMatched / inputParts.length) * 10;
 
-  return matchRate + orderBonus;
+  return recall * 70 + precision * 30 + orderBonus;
+}
+
+// ─── 指定した部品（重複可）を"すべて"含む漢字の候補集合を求めるヘルパー ─────────
+// 部品ごとに異体字も同一視して探す。kanji_parts は (kanji_char, part_char) の
+// 重複無しペアなので、まずは種類（重複除去）ベースで「すべての種類を含む」候補を
+// 絞り込む。実際の必要個数（例: 口が3個）を満たしているかは、呼び出し側で
+// kanji_patterns の実データ（重複を保持した配列）を見て calcScore 側で判定する。
+async function findCandidatesContainingParts(client, parts) {
+  const uniqueParts = [...new Set(parts)];
+  const variantArrays = await expandWithVariants(client, uniqueParts);
+
+  const cartesian = arrays =>
+    arrays.reduce((acc, curr) => acc.flatMap(a => curr.map(b => [...a, b])), [[]]);
+  const combos = cartesian(variantArrays);
+
+  const candidates = new Set();
+  for (const combo of combos) {
+    const { rows } = await client.query(
+      `SELECT kanji_char FROM kanji_parts
+       WHERE part_char = ANY($1)
+       GROUP BY kanji_char
+       HAVING COUNT(DISTINCT part_char) = $2`,
+      [combo, combo.length]
+    );
+    for (const { kanji_char } of rows) candidates.add(kanji_char);
+  }
+  return candidates;
+}
+
+// ─── 候補群の kanji_patterns を1回のクエリでまとめて取得し、calcScore で
+// 最良層のスコアを付けて上位順にソートする。
+// スコアが同点の場合、レアな異体字よりも常用漢字・使用頻度の高い字を優先する
+// タイブレークを入れる（そうしないと稀にしか使われない字が先頭に来てしまう）。
+async function scoreCandidates(client, candidates, inputParts, limit = 100) {
+  if (!candidates.length) return [];
+  const [{ rows: patternRows }, { rows: metaRows }] = await Promise.all([
+    client.query(`SELECT kanji_char, parts FROM kanji_patterns WHERE kanji_char = ANY($1)`, [candidates]),
+    client.query(`SELECT character, is_joyo, frequency FROM kanji WHERE character = ANY($1)`, [candidates]),
+  ]);
+  const byChar = new Map();
+  for (const row of patternRows) {
+    if (!byChar.has(row.kanji_char)) byChar.set(row.kanji_char, []);
+    byChar.get(row.kanji_char).push(row.parts);
+  }
+  const metaByChar = new Map(metaRows.map(r => [r.character, r]));
+
+  const scored = candidates.map(k => {
+    const layers = byChar.get(k) || [];
+    const score = layers.reduce((best, parts) => Math.max(best, calcScore(parts, inputParts)), 0);
+    const meta = metaByChar.get(k);
+    return {
+      k,
+      score,
+      isJoyo: meta?.is_joyo ? 1 : 0,
+      // frequency は数値が小さいほど頻出（KANJIDIC2の定義）。無い場合は最下位扱い。
+      frequency: meta?.frequency ?? Infinity,
+    };
+  });
+
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (b.isJoyo !== a.isJoyo) return b.isJoyo - a.isJoyo;
+    return a.frequency - b.frequency;
+  });
+
+  return scored.slice(0, limit).map(o => o.k);
 }
 
 // ─── POST /api/search ─────────────────────────────────────────────────────────
@@ -170,31 +245,10 @@ app.post('/api/search', async (req, res) => {
     }
 
     // ── 部品→漢字（複数部品）────────────────────────────────────────────────────
-    const variantArrays = await expandWithVariants(client, parts);
-
-    // 全組み合わせを生成
-    const cartesian = arrays =>
-      arrays.reduce((acc, curr) => acc.flatMap(a => curr.map(b => [...a, b])), [[]]);
-    const combos = cartesian(variantArrays);
-
-    // 全 combo で intersection を取り matchCount を集計
-    const matchCount = new Map();
-    for (const combo of combos) {
-      // combo に含まれる全部品を持つ漢字を取得
-      const { rows } = await client.query(
-        `SELECT kanji_char FROM kanji_parts
-         WHERE part_char = ANY($1)
-         GROUP BY kanji_char
-         HAVING COUNT(DISTINCT part_char) = $2`,
-        [combo, combo.length]
-      );
-      for (const { kanji_char } of rows) {
-        matchCount.set(kanji_char, (matchCount.get(kanji_char) || 0) + 1);
-      }
-    }
+    const candidateSet = await findCandidatesContainingParts(client, parts);
 
     // region フィルター
-    let candidates = [...matchCount.keys()];
+    let candidates = [...candidateSet];
     if (region !== 'chinese') {
       const { rows: kanjiRows } = await client.query(
         `SELECT character FROM kanji
@@ -205,25 +259,8 @@ app.post('/api/search', async (req, res) => {
       candidates = candidates.filter(k => allowed.has(k));
     }
 
-    // Feature 8: calcScore でスコア計算し上位100件にソート
-    const scored = await Promise.all(
-      candidates.map(async k => {
-        const { rows } = await client.query(
-          `SELECT parts FROM kanji_patterns WHERE kanji_char = $1 ORDER BY layer_index`,
-          [k]
-        );
-        const score = rows.reduce((best, row) => {
-          return Math.max(best, calcScore(row.parts, parts));
-        }, 0);
-        return { k, score };
-      })
-    );
-
-    const results = scored
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 100)
-      .map(o => o.k);
-
+    // Feature 8: calcScore でスコア計算し上位100件にソート（重複部品の必要数も考慮）
+    const results = await scoreCandidates(client, candidates, parts, 100);
     return res.json({ results });
 
   } catch (err) {
@@ -294,9 +331,10 @@ app.post('/api/search/subtract', async (req, res) => {
       p => p.codePointAt(0) > 0x007F
     );
 
-    // subtrahend を1回除去
+    // subtrahend を1回除去（異体字も同一部品とみなす）
     const remaining = [...directParts];
-    const subIdx = remaining.indexOf(subtrahend);
+    const [subtrahendVariants] = await expandWithVariants(client, [subtrahend]);
+    const subIdx = remaining.findIndex(p => subtrahendVariants.includes(p));
     if (subIdx !== -1) {
       remaining.splice(subIdx, 1);
     }
@@ -305,28 +343,14 @@ app.post('/api/search/subtract', async (req, res) => {
       return res.json({ results: [], remainingParts: remaining });
     }
 
-    // 既存の複数部品検索ロジックと同じ処理
-    const variantArrays = await expandWithVariants(client, remaining);
-
-    const cartesian = arrays =>
-      arrays.reduce((acc, curr) => acc.flatMap(a => curr.map(b => [...a, b])), [[]]);
-    const combos = cartesian(variantArrays);
-
-    const matchCount = new Map();
-    for (const combo of combos) {
-      const { rows } = await client.query(
-        `SELECT kanji_char FROM kanji_parts
-         WHERE part_char = ANY($1)
-         GROUP BY kanji_char
-         HAVING COUNT(DISTINCT part_char) = $2`,
-        [combo, combo.length]
-      );
-      for (const { kanji_char } of rows) {
-        matchCount.set(kanji_char, (matchCount.get(kanji_char) || 0) + 1);
-      }
+    // 残った部品を「含む」漢字を広く集める（候補プール）
+    const candidateSet = await findCandidatesContainingParts(client, remaining);
+    let candidates = [...candidateSet];
+    // 残り部品が1つだけの場合、その部品自体も候補に含める（例: 仙-人 → 山 自体が答え）
+    if (remaining.length === 1 && !candidates.includes(remaining[0])) {
+      candidates.push(remaining[0]);
     }
 
-    let candidates = [...matchCount.keys()];
     if (region && region !== 'chinese') {
       const { rows: kanjiRows } = await client.query(
         `SELECT character FROM kanji
@@ -337,25 +361,39 @@ app.post('/api/search/subtract', async (req, res) => {
       candidates = candidates.filter(k => allowed.has(k));
     }
 
-    const scored = await Promise.all(
-      candidates.map(async k => {
-        const { rows } = await client.query(
-          `SELECT parts FROM kanji_patterns WHERE kanji_char = $1 ORDER BY layer_index`,
-          [k]
-        );
-        const score = rows.reduce((best, row) => {
-          return Math.max(best, calcScore(row.parts, remaining));
-        }, 0);
-        return { k, score };
-      })
-    );
+    // 「含む」候補プールから、直接部品（layer_index=0）が remaining と
+    // ちょうど一致する漢字だけに絞り込む（＝厳密な引き算結果）。個数（多重度）も
+    // 見る必要がある（例: remaining=[口,口] のとき、口が1個の漢字は不一致）。
+    // 候補ごとに逐次クエリすると遅いので、1回のクエリでまとめて取得する。
+    const remainingCnt = {};
+    remaining.forEach(p => (remainingCnt[p] = (remainingCnt[p] || 0) + 1));
+    const remainingTotal = remaining.length;
 
-    const results = scored
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 100)
-      .map(o => o.k);
+    const { rows: patternsForCandidates } = candidates.length
+      ? await client.query(
+          `SELECT kanji_char, parts FROM kanji_patterns WHERE kanji_char = ANY($1) AND layer_index = 0`,
+          [candidates]
+        )
+      : { rows: [] };
+    const patternMap = new Map(patternsForCandidates.map(r => [r.kanji_char, r.parts]));
 
-    return res.json({ results, remainingParts: remaining });
+    const exactMatches = [];
+    for (const k of candidates) {
+      if (remaining.length === 1 && k === remaining[0]) {
+        exactMatches.push(k);
+        continue;
+      }
+      const parts = patternMap.get(k);
+      if (!parts) continue;
+      const kParts = parts.filter(p => p.codePointAt(0) > 0x007F);
+      if (kParts.length !== remainingTotal) continue;
+      const kCnt = {};
+      kParts.forEach(p => (kCnt[p] = (kCnt[p] || 0) + 1));
+      const isExact = Object.entries(remainingCnt).every(([p, n]) => kCnt[p] === n);
+      if (isExact) exactMatches.push(k);
+    }
+
+    return res.json({ results: exactMatches, remainingParts: remaining });
 
   } catch (err) {
     console.error(err);
@@ -370,14 +408,24 @@ app.get('/api/kanji/:char', async (req, res) => {
   const char = req.params.char;
   const client = await pool.connect();
   try {
-    const [kanjiRes, partsRes] = await Promise.all([
+    const escapedChar = char.replace(/[%_\\]/g, m => `\\${m}`);
+    const [kanjiRes, partsRes, wordsRes] = await Promise.all([
       client.query(`SELECT * FROM kanji WHERE character = $1`, [char]),
       client.query(`SELECT part_char FROM kanji_parts WHERE kanji_char = $1`, [char]),
+      // この漢字を使った単語（短い語＝より基本的な語を優先して表示）
+      client.query(
+        `SELECT kanji_form, reading, meanings FROM words
+         WHERE kanji_form LIKE '%' || $1 || '%' ESCAPE '\\'
+         ORDER BY LENGTH(kanji_form) ASC, kanji_form ASC
+         LIMIT 30`,
+        [escapedChar]
+      ),
     ]);
     if (!kanjiRes.rows.length) return res.status(404).json({ error: 'not found' });
     res.json({
       ...kanjiRes.rows[0],
       parts: partsRes.rows.map(r => r.part_char),
+      words: wordsRes.rows,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -400,6 +448,41 @@ app.get('/api/word/:text', async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'not found' });
     res.json({ text, entries: rows });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// ─── GET /api/words/search ────────────────────────────────────────────────────
+// ?q=<text> — kanji_form / reading を検索する。完全一致 > 前方一致 > 部分一致 の
+// 優先順で表示する（前方一致だけだと「〜という語の途中に含まれる語」を拾えなかったため）。
+app.get('/api/words/search', async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q) return res.json({ results: [] });
+  const escaped = q.replace(/[%_\\]/g, m => `\\${m}`);
+
+  const client = await pool.connect();
+  try {
+    const { rows } = await client.query(
+      `SELECT kanji_form, reading, meanings
+       FROM words
+       WHERE kanji_form = $1 OR reading = $1
+          OR kanji_form LIKE '%' || $2 || '%' ESCAPE '\\'
+          OR reading LIKE '%' || $2 || '%' ESCAPE '\\'
+       ORDER BY
+         CASE
+           WHEN kanji_form = $1 OR reading = $1 THEN 0
+           WHEN kanji_form LIKE $2 || '%' ESCAPE '\\' OR reading LIKE $2 || '%' ESCAPE '\\' THEN 1
+           ELSE 2
+         END,
+         LENGTH(COALESCE(kanji_form, reading)) ASC
+       LIMIT 50`,
+      [q, escaped]
+    );
+    res.json({ results: rows });
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   } finally {
     client.release();

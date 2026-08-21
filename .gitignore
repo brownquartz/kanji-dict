@@ -31,3 +31,12 @@ yarn-error.log*
 /.claude
 
 /server/node_modules
+
+# ローカル動作確認用のプロセスログ
+/logs/
+
+# 一括インポートスクリプトが使うローカルデータファイル（大きいので追跡しない。
+# 各 scripts/import-*.js のコメントにあるURLから取得する）
+/scripts/JMdict_e.gz
+/scripts/wnjpn.db
+/scripts/ids.txt

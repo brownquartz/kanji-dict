@@ -101,6 +101,7 @@ export default function HandwritingCanvas({ onRecognize }) {
           cursor: 'crosshair',
           display: 'block',
           background: '#fff',
+          touchAction: 'none',
         }}
         onPointerDown={startDrawing}
         onPointerMove={draw}

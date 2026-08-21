@@ -6,7 +6,8 @@
   background: #f9f9f9;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  font-family: 'Segoe UI', Roboto, sans-serif;
+  /* 中国語圏の漢字は端末標準フォントに無いことが多いため、Noto Sans SC/TC をフォールバックに追加 */
+  font-family: 'Segoe UI', Roboto, 'Noto Sans SC', 'Noto Sans TC', sans-serif;
 }
 
 .header {
@@ -538,4 +539,77 @@
 .word-meanings {
   margin: 0;
   color: #333;
+}
+
+/* ─── 説明言語の選択UI ────────────────────────────────────────── */
+.language-settings {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  font-size: 0.85rem;
+  color: #666;
+  flex-wrap: wrap;
+}
+.language-settings__label {
+  margin-right: 0.2rem;
+}
+.language-settings button {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid #ccc;
+  border-radius: 12px;
+  background: #f8f9fa;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+.language-settings button.active {
+  background-color: #007bff;
+  color: #fff;
+  border-color: #007bff;
+}
+
+/* ─── 複数言語の意味表示 ──────────────────────────────────────── */
+.meanings-list__block + .meanings-list__block {
+  margin-top: 0.5rem;
+}
+.meanings-list__lang-label {
+  font-size: 0.75rem;
+  color: #888;
+  margin: 0 0 0.15rem;
+  font-weight: 600;
+}
+
+/* ─── 漢字ページ: この漢字を使った熟語 ────────────────────────── */
+.kanji-words .word-entry {
+  text-align: left;
+}
+
+/* ─── フッター: データ出典クレジット ──────────────────────────── */
+.site-footer {
+  max-width: 800px;
+  margin: 2rem auto 1rem;
+  padding: 1rem;
+  font-size: 0.75rem;
+  color: #888;
+  border-top: 1px solid #e0e0e0;
+}
+.site-footer p {
+  margin: 0 0 0.4rem;
+}
+.site-footer ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.site-footer li {
+  margin-bottom: 0.2rem;
+}
+.site-footer a {
+  color: #888;
+  text-decoration: underline;
+}
+.site-footer a:hover {
+  color: #007bff;
 }

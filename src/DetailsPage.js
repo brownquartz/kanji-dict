@@ -1,6 +1,7 @@
 // src/DetailsPage.js
 import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
+import MeaningsList from './MeaningsList';
 import './App.css';
 
 const API_URL = process.env.REACT_APP_API_URL ?? 'http://localhost:4000';
@@ -21,7 +22,6 @@ export default function DetailsPage({ kanji, onPartClick }) {
   const hex = kanji.codePointAt(0).toString(16).toUpperCase().padStart(4, '0');
   const on  = data.on_yomi?.join('、');
   const kun = data.kun_yomi?.join('、');
-  const meanings = data.meanings?.ja?.filter(m => m);
   const description = `漢字「${kanji}」の情報。Unicode U+${hex}、音読み: ${on || '-'}、訓読み: ${kun || '-'}。`;
 
   return (
@@ -38,12 +38,10 @@ export default function DetailsPage({ kanji, onPartClick }) {
       {on  && <p>音読み: {on}</p>}
       {kun && <p>訓読み: {kun}</p>}
 
-      {meanings?.length > 0 && (
+      {data.meanings && (
         <div className="meanings">
           <p>意味:</p>
-          <ol>
-            {meanings.map((m, i) => <li key={i}>{m}</li>)}
-          </ol>
+          <MeaningsList meanings={data.meanings} ordered />
         </div>
       )}
 
@@ -57,6 +55,19 @@ export default function DetailsPage({ kanji, onPartClick }) {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {data.words?.length > 0 && (
+        <div className="kanji-words">
+          <p>この漢字を使った熟語:</p>
+          {data.words.map((w, i) => (
+            <div key={i} className="word-entry">
+              <h3 style={{ fontSize: '1.3rem', margin: '0 0 0.25rem' }}>{w.kanji_form}</h3>
+              <p className="word-reading">{w.reading}</p>
+              <MeaningsList meanings={w.meanings} />
+            </div>
+          ))}
         </div>
       )}
     </div>

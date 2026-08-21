@@ -140,7 +140,7 @@ export default function WordFromParts() {
           {wordResult.entries.map((entry, i) => (
             <div key={i} className="word-entry">
               <p className="word-reading">{entry.reading}</p>
-              <p className="word-meanings">{(entry.meanings?.en || []).join('、')}</p>
+              <p className="word-meanings">{(entry.meanings?.ja?.length ? entry.meanings.ja : entry.meanings?.en || []).join('、')}</p>
             </div>
           ))}
         </div>

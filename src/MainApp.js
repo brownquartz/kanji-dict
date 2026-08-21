@@ -1,9 +1,9 @@
 // src/MainApp.js
 import React, { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import HandwritingCanvas from './HandwritingCanvas';
 import SearchRanking from './SearchRanking';
-import WordFromParts from './WordFromParts';
+// 熟語(部品から)は一旦非表示にしている。復活させる場合は WordFromParts をインポートし直す。
 import './MainApp.css';
 
 const API_URL = process.env.REACT_APP_API_URL ?? 'http://localhost:4000';
@@ -88,7 +88,9 @@ export default function MainApp() {
   };
 
   const handleHandwritingRecognize = (candidates) => {
-    setResults(candidates.filter(c => /\p{Script=Han}/u.test(c)));
+    // 手書きは1文字ずつの検索にしたいので、単一の漢字候補のみ残す
+    // （熟語などの複数文字候補は除外。候補が複数出るのはそのままでよい）
+    setResults(candidates.filter(c => Array.from(c).length === 1 && /\p{Script=Han}/u.test(c)));
     setPage(1);
   };
 
@@ -100,7 +102,6 @@ export default function MainApp() {
     kanjiToParts: `漢字を複数層で分けて、\n全要素を重複なしで出力します。\nex) "嘔" ⇒ "口區匸品"\n"池" ⇒ "氵也"\n"解" ⇒ "刀牛角丿𠃌"`,
     subtract: `漢字から部品を引いて、\n残りの部品を持つ漢字を探します。\nex) "汲 − 氵" ⇒ "及"\n    "解 − 角" ⇒ "判"`,
     handwriting: `キャンバスに漢字を書いて認識します。\n認識結果をクリックすると詳細を表示。`,
-    wordFromParts: `2文字の熟語が分からなくても、\n1文字ずつ部品から特定してつなげれば\n熟語として検索できます。`,
   };
 
   return (
@@ -118,13 +119,16 @@ export default function MainApp() {
         </span>
       </h1>
 
+      <p style={{ textAlign: 'center', marginTop: '-0.5rem', marginBottom: '1.5rem' }}>
+        <Link to="/words">単語（表記・読み）から検索する →</Link>
+      </p>
+
       <div className="controls">
         <div className="modes">
           <button className={mode === 'partsToKanji' ? 'active' : ''} onClick={() => handleModeChange('partsToKanji')}>部品→漢字</button>
           <button className={mode === 'kanjiToParts' ? 'active' : ''} onClick={() => handleModeChange('kanjiToParts')}>漢字→部品</button>
           <button className={mode === 'subtract' ? 'active' : ''} onClick={() => handleModeChange('subtract')}>引き算</button>
           <button className={mode === 'handwriting' ? 'active' : ''} onClick={() => handleModeChange('handwriting')}>手書き</button>
-          <button className={mode === 'wordFromParts' ? 'active' : ''} onClick={() => handleModeChange('wordFromParts')}>熟語(部品から)</button>
         </div>
 
         {(mode === 'partsToKanji' || mode === 'kanjiToParts') && (
@@ -186,31 +190,27 @@ export default function MainApp() {
         {mode === 'handwriting' && (
           <HandwritingCanvas onRecognize={handleHandwritingRecognize} />
         )}
-
-        {mode === 'wordFromParts' && <WordFromParts />}
       </div>
 
-      {/* 結果一覧（手書きも含む）。熟語(部品から)は専用のUIを持つため対象外。 */}
-      {mode !== 'wordFromParts' && (
-        <div className="result-section">
-          <ul className="result-list">
-            {visible.length > 0 ? (
-              visible.map((k, i) => (
-                <li key={i} onClick={() => navigate(`/kanji/${encodeURIComponent(k)}`)}>{k}</li>
-              ))
-            ) : (
-              <li className="no-data">
-                {(searchTerm || (mode === 'subtract' && subMinuend) || mode === 'handwriting') ? 'X' : '.'}
-              </li>
-            )}
-          </ul>
-          {moreCount > 0 && (
-            <button className="more-button" onClick={() => setPage(p => p + 1)}>
-              その他（{moreCount}件）
-            </button>
+      {/* 結果一覧（手書きも含む） */}
+      <div className="result-section">
+        <ul className="result-list">
+          {visible.length > 0 ? (
+            visible.map((k, i) => (
+              <li key={i} onClick={() => navigate(`/kanji/${encodeURIComponent(k)}`)}>{k}</li>
+            ))
+          ) : (
+            <li className="no-data">
+              {(searchTerm || (mode === 'subtract' && subMinuend) || mode === 'handwriting') ? 'X' : '.'}
+            </li>
           )}
-        </div>
-      )}
+        </ul>
+        {moreCount > 0 && (
+          <button className="more-button" onClick={() => setPage(p => p + 1)}>
+            その他（{moreCount}件）
+          </button>
+        )}
+      </div>
 
       <SearchRanking onKanjiClick={(q) => {
         handleModeChange('partsToKanji');

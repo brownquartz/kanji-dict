@@ -17,7 +17,7 @@ export default function SearchRanking({ onKanjiClick }) {
     fetch(`${API_URL}/api/ranking?period=${period}&limit=10`)
       .then((res) => res.json())
       .then((data) => {
-        if (!cancelled) setRanking(data);
+        if (!cancelled) setRanking(data.ranking || []);
       })
       .catch((err) => {
         console.error('Failed to fetch ranking:', err);
